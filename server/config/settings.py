@@ -42,6 +42,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -114,10 +115,22 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files
+# Static files (WhiteNoise)
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
+# Flutter web app directory (подключается как WhiteNoise extra dir)
+FLUTTER_WEB_DIR = os.environ.get('FLUTTER_WEB_DIR', '')
+WHITENOISE_ROOT = FLUTTER_WEB_DIR if FLUTTER_WEB_DIR else None
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'

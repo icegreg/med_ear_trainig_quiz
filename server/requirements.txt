@@ -12,3 +12,4 @@ PyJWT==2.12.1
 sqlparse==0.5.5
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+whitenoise==6.12.0
