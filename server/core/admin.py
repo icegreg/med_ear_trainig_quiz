@@ -106,11 +106,70 @@ class DoctorAdmin(admin.ModelAdmin):
 
 # --- Patient ---
 
+class AssignedQuizInline(admin.TabularInline):
+    """Назначенные (ожидающие) тесты пациента."""
+    model = PatientQuizAssignment
+    extra = 0
+    verbose_name = 'Назначенный тест'
+    verbose_name_plural = 'Назначенные тесты (ожидают прохождения)'
+    fields = ['quiz', 'assigned_at', 'starts_at', 'ends_at']
+    readonly_fields = ['assigned_at']
+    raw_id_fields = ['quiz']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(
+            status=PatientQuizAssignment.Status.ASSIGNED,
+        ).select_related('quiz')
+
+
+class CompletedQuizInline(admin.TabularInline):
+    """Пройденные тесты пациента."""
+    model = PatientQuizAssignment
+    extra = 0
+    verbose_name = 'Пройденный тест'
+    verbose_name_plural = 'Пройденные тесты'
+    fields = ['quiz', 'assigned_at', 'completed_at']
+    readonly_fields = ['quiz', 'assigned_at', 'completed_at']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(
+            status=PatientQuizAssignment.Status.COMPLETED,
+        ).select_related('quiz')
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-    list_display = ['user', 'doctor', 'created_at']
+    list_display = ['user', 'doctor', 'assigned_count', 'completed_count', 'created_at']
     list_filter = ['doctor']
     raw_id_fields = ['user', 'doctor']
+    inlines = [AssignedQuizInline, CompletedQuizInline]
+
+    def get_queryset(self, request):
+        from django.db.models import Count, Q
+        return super().get_queryset(request).annotate(
+            _assigned_count=Count(
+                'quiz_assignments',
+                filter=Q(quiz_assignments__status='assigned'),
+            ),
+            _completed_count=Count(
+                'quiz_assignments',
+                filter=Q(quiz_assignments__status='completed'),
+            ),
+        )
+
+    @admin.display(description='Назначено', ordering='_assigned_count')
+    def assigned_count(self, obj):
+        return obj._assigned_count
+
+    @admin.display(description='Пройдено', ordering='_completed_count')
+    def completed_count(self, obj):
+        return obj._completed_count
 
 
 # --- AudioFile (soft delete) ---

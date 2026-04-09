@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'constants.dart';
@@ -9,14 +10,29 @@ final storageProvider = Provider<StorageService>((ref) {
 
 class StorageService {
   final SharedPreferences _prefs;
+  final FlutterSecureStorage _secure;
 
-  StorageService(this._prefs);
+  // Кэш токена в памяти (secure storage — async)
+  String? _deviceTokenCache;
 
-  // Device token
-  String? get deviceToken => _prefs.getString('device_token');
-  Future<void> setDeviceToken(String token) =>
-      _prefs.setString('device_token', token);
-  Future<void> clearDeviceToken() => _prefs.remove('device_token');
+  StorageService(this._prefs, this._secure);
+
+  // Device token — хранится в secure storage
+  String? get deviceToken => _deviceTokenCache;
+
+  Future<void> loadDeviceToken() async {
+    _deviceTokenCache = await _secure.read(key: 'device_token');
+  }
+
+  Future<void> setDeviceToken(String token) async {
+    await _secure.write(key: 'device_token', value: token);
+    _deviceTokenCache = token;
+  }
+
+  Future<void> clearDeviceToken() async {
+    await _secure.delete(key: 'device_token');
+    _deviceTokenCache = null;
+  }
 
   // Patient ID
   int? get patientId => _prefs.getInt('patient_id');
@@ -53,5 +69,5 @@ class StorageService {
       _prefs.setString('api_base_url', url);
   Future<void> resetApiBaseUrl() => _prefs.remove('api_base_url');
 
-  bool get isLoggedIn => deviceToken != null;
+  bool get isLoggedIn => _deviceTokenCache != null;
 }

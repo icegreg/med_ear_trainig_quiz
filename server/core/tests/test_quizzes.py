@@ -89,6 +89,40 @@ class QuizSubmitTest(APITestBase):
         )
         self.assertEqual(resp.status_code, 403)
 
+    def test_submit_invalid_answer_value(self):
+        """Ответ не из допустимых вариантов → 400."""
+        resp = self.client.post(
+            f'/api/quizzes/{self.quiz.id}/submit',
+            data=json.dumps({
+                'answers': [{'question_id': self.question.id, 'answer': 'INVALID'}]
+            }),
+            content_type='application/json',
+            **self.patient_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_submit_missing_questions(self):
+        """Не все вопросы отвечены → 400."""
+        resp = self.client.post(
+            f'/api/quizzes/{self.quiz.id}/submit',
+            data=json.dumps({'answers': []}),
+            content_type='application/json',
+            **self.patient_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_submit_unknown_question_id(self):
+        """Несуществующий question_id → 400."""
+        resp = self.client.post(
+            f'/api/quizzes/{self.quiz.id}/submit',
+            data=json.dumps({
+                'answers': [{'question_id': 99999, 'answer': 'A'}]
+            }),
+            content_type='application/json',
+            **self.patient_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
     def test_submit_not_assigned_quiz(self):
         from core.models import Quiz
         other_quiz = Quiz.objects.create(title='Не назначен')

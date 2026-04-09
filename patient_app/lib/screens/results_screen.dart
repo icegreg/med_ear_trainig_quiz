@@ -40,19 +40,6 @@ class ResultsScreen extends ConsumerWidget {
                         style: theme.textTheme.bodyLarge
                             ?.copyWith(fontWeight: FontWeight.w600)),
                     subtitle: Text(date),
-                    trailing: r.score != null
-                        ? Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('${r.score}',
-                                  style: theme.textTheme.headlineMedium
-                                      ?.copyWith(
-                                          color: theme.colorScheme.primary)),
-                              Text('баллов',
-                                  style: theme.textTheme.bodyMedium),
-                            ],
-                          )
-                        : null,
                   ),
                 );
               },

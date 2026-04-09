@@ -97,15 +97,18 @@ class ApiClient {
     String fileUrl, {
     void Function(double)? onProgress,
   }) async {
-    // Строим полный URL
-    final baseUrl = _dio.options.baseUrl;
-    final url = fileUrl.startsWith('http')
-        ? fileUrl
-        : '${baseUrl.replaceAll('/api', '')}$fileUrl';
+    // fileUrl приходит как "/media/audio/note_c4.wav"
+    // Нужен абсолютный запрос, минуя baseUrl (/api)
+    final url = fileUrl.startsWith('http') ? fileUrl : fileUrl;
 
-    final response = await _dio.get<List<int>>(
+    final response = await Dio().get<List<int>>(
       url,
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: _storage.deviceToken != null
+            ? {'Authorization': 'Bearer ${_storage.deviceToken}'}
+            : null,
+      ),
       onReceiveProgress: (received, total) {
         if (total > 0 && onProgress != null) {
           onProgress(received / total);

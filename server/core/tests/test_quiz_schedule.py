@@ -18,7 +18,7 @@ class QuizScheduleTest(APITestBase):
         return self.client.post(
             f'/api/quizzes/{self.quiz.id}/submit',
             data=json.dumps({
-                'answers': [{'question_id': self.question.id, 'answer': 'да'}]
+                'answers': [{'question_id': self.question.id, 'answer': 'B'}]
             }),
             content_type='application/json',
             **self.patient_headers(),

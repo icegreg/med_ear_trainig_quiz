@@ -7,14 +7,24 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-cpig3n*=+dsd-1(-%4vrj+cqft(juo8+v2s2woui(@d0+&8-o_',
-)
+# Environment: test | preprod | prod
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'test')
 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
+# SECRET_KEY — обязателен для preprod/prod
+_secret_key = os.environ.get('DJANGO_SECRET_KEY')
+if not _secret_key and ENVIRONMENT == 'prod':
+    raise RuntimeError('DJANGO_SECRET_KEY is required in production!')
+SECRET_KEY = _secret_key or 'django-insecure-dev-only-key-do-not-use-in-prod'
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# DEBUG — True для test/preprod, False для prod
+if ENVIRONMENT == 'prod':
+    DEBUG = False
+else:
+    DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
+
+ALLOWED_HOSTS = os.environ.get(
+    'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1'
+).split(',')
 
 
 # Application definition
@@ -125,3 +135,31 @@ CORS_ALLOW_HEADERS = [
     'content-type',
     'origin',
 ]
+
+# Rate limiting (requests per minute for auth endpoints)
+AUTH_RATE_LIMIT = os.environ.get('AUTH_RATE_LIMIT', '5/m')
+
+# Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'core.auth': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

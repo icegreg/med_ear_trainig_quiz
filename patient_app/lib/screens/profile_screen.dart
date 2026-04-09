@@ -30,11 +30,6 @@ class ProfileScreen extends ConsumerWidget {
               label: 'Пользователь',
               value: p.username,
             ),
-            _InfoTile(
-              icon: Icons.medical_services_outlined,
-              label: 'Врач',
-              value: p.doctorId ?? 'Не назначен',
-            ),
             const SizedBox(height: 48),
             OutlinedButton.icon(
               onPressed: () => _confirmLogout(context, ref),

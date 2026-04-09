@@ -10,8 +10,11 @@ server/db.sqlite3
 server/media/
 server/staticfiles/
 
-# Docker
+# Docker / env
 .env
+.env.test
+.env.preprod
+.env.prod
 
 # IDE
 .idea/

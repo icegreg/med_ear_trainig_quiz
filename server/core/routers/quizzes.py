@@ -92,9 +92,9 @@ def get_quiz_audio_files(request, quiz_id: int):
     ]
 
 
-@router.post('/{quiz_id}/submit', response={200: ResultConfirmationSchema, 403: ResultConfirmationSchema})
+@router.post('/{quiz_id}/submit', response={200: ResultConfirmationSchema, 400: ResultConfirmationSchema, 403: ResultConfirmationSchema})
 def submit_quiz_result(request, quiz_id: int, payload: SubmitResultSchema):
-    """Отправить ответы на квиз. Проверяет доступность и повторную отправку."""
+    """Отправить ответы на квиз. Проверяет доступность, повторную отправку и валидность ответов."""
     assignment = get_object_or_404(
         PatientQuizAssignment, patient=request.patient, quiz_id=quiz_id
     )
@@ -106,10 +106,27 @@ def submit_quiz_result(request, quiz_id: int, payload: SubmitResultSchema):
     if not ok:
         return error
 
-    questions = {q.id: q.correct_answer for q in assignment.quiz.questions.all()}
+    # Загружаем вопросы
+    quiz_questions = {q.id: q for q in assignment.quiz.questions.all()}
+
+    # Валидация: все вопросы должны быть отвечены
+    answered_ids = {a.question_id for a in payload.answers}
+    missing = set(quiz_questions.keys()) - answered_ids
+    if missing:
+        return 400, {'status': 'error', 'message': f'Не все вопросы отвечены. Пропущено: {len(missing)}.'}
+
+    # Валидация: ответы должны быть из допустимых вариантов
+    for a in payload.answers:
+        question = quiz_questions.get(a.question_id)
+        if question is None:
+            return 400, {'status': 'error', 'message': f'Вопрос {a.question_id} не найден в тесте.'}
+        if a.answer not in question.options:
+            return 400, {'status': 'error', 'message': f'Недопустимый ответ «{a.answer}» на вопрос {a.question_id}.'}
+
+    # Подсчёт баллов
     score = sum(
         1 for a in payload.answers
-        if questions.get(a.question_id) == a.answer
+        if quiz_questions[a.question_id].correct_answer == a.answer
     )
 
     QuizResult.objects.create(

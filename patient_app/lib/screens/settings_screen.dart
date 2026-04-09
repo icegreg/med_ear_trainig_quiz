@@ -84,51 +84,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
           ),
 
-          const Divider(height: 32),
-
-          // API URL
-          Text('Подключение', style: theme.textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text('Сборка: $kFlavor',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _apiUrlController,
-            decoration: InputDecoration(
-              labelText: 'API URL',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.save),
-                onPressed: () async {
-                  final url = _apiUrlController.text.trim();
-                  if (url.isNotEmpty) {
-                    await storage.setApiBaseUrl(url);
-                    ref.read(apiClientProvider).updateBaseUrl(url);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('URL сохранён')),
-                      );
+          // API URL — только для dev/preprod
+          if (kFlavor != 'prod') ...[
+            const Divider(height: 32),
+            Text('Подключение', style: theme.textTheme.headlineMedium),
+            const SizedBox(height: 8),
+            Text('Сборка: $kFlavor',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _apiUrlController,
+              decoration: InputDecoration(
+                labelText: 'API URL',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.save),
+                  onPressed: () async {
+                    final url = _apiUrlController.text.trim();
+                    if (url.isNotEmpty) {
+                      await storage.setApiBaseUrl(url);
+                      ref.read(apiClientProvider).updateBaseUrl(url);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('URL сохранён')),
+                        );
+                      }
                     }
-                  }
-                },
+                  },
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () async {
-              await storage.resetApiBaseUrl();
-              _apiUrlController.text = kDefaultApiBaseUrl;
-              ref.read(apiClientProvider).updateBaseUrl(kDefaultApiBaseUrl);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text('Сброшено на $kDefaultApiBaseUrl')),
-                );
-              }
-            },
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () async {
+                await storage.resetApiBaseUrl();
+                _apiUrlController.text = kDefaultApiBaseUrl;
+                ref.read(apiClientProvider).updateBaseUrl(kDefaultApiBaseUrl);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Сброшено на $kDefaultApiBaseUrl')),
+                  );
+                }
+              },
             child: const Text('Сбросить на дефолт'),
           ),
+          ],
         ],
       ),
     );

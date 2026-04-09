@@ -68,14 +68,14 @@ class DoctorJWTAuthTest(APITestBase):
         )
         self.assertEqual(resp.status_code, 401)
 
-    def test_doctor_login_patient_user_forbidden(self):
-        """Пациент не может авторизоваться как врач."""
+    def test_doctor_login_patient_user_denied(self):
+        """Пациент не может авторизоваться как врач — единый 401 (без user enumeration)."""
         resp = self.client.post(
             '/api/auth/doctor/login',
             data=json.dumps({'username': 'patient1', 'password': 'patpass123'}),
             content_type='application/json',
         )
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
 
     def test_doctor_refresh_success(self):
         # Сначала логинимся
