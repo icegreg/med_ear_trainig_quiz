@@ -1,11 +1,14 @@
 # Docker Compose для деплоя через Coolify.
-# Coolify использует Traefik — nginx выступает как внутренний reverse proxy,
-# Traefik маршрутизирует трафик на nginx.
+# Coolify использует Traefik — nginx выступает как внутренний reverse proxy.
 #
 # В Coolify:
 # 1. Создать приложение → Docker Compose
 # 2. Указать этот файл: docker-compose.coolify.yml
-# 3. Задать переменные окружения (см. .env.example)
+# 3. Задать переменные окружения в Coolify UI:
+#    - DJANGO_SECRET_KEY (обязательно)
+#    - POSTGRES_PASSWORD (обязательно)
+#    - DJANGO_ALLOWED_HOSTS (ваш домен)
+#    - CORS_ALLOWED_ORIGINS (https://ваш-домен)
 # 4. Домен привязать к сервису nginx
 
 services:
@@ -16,9 +19,9 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-med_ear}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -30,15 +33,15 @@ services:
       - "8000"
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-prod}
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-${SERVICE_FQDN_NGINX}}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost}
       - POSTGRES_DB=${POSTGRES_DB:-med_ear}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://${SERVICE_FQDN_NGINX}}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost}
       - AUTH_RATE_LIMIT=${AUTH_RATE_LIMIT:-5/m}
     volumes:
       - med-ear-media:/app/media
