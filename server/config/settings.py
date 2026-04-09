@@ -5,6 +5,8 @@ Django settings for config project.
 import os
 from pathlib import Path
 
+import dj_database_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Environment: test | preprod | prod
@@ -73,8 +75,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database
+# Приоритет: DATABASE_URL > POSTGRES_* > SQLite (локальная разработка)
 
-if os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_DB'):
+if os.environ.get('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(conn_max_age=600),
+    }
+elif os.environ.get('POSTGRES_DB'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -87,10 +94,9 @@ if os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_DB'):
     }
 else:
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+        'default': dj_database_url.config(
+            default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        ),
     }
 
 
