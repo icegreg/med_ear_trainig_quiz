@@ -136,6 +136,10 @@ STORAGES = {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
+if DEBUG:
+    DEBUG_TOOLBAR_CONFIG = {
+        'SHOW_TOOLBAR_CALLBACK': lambda request: True,
+    }
 
 # Flutter web app directory (подключается как WhiteNoise extra dir)
 FLUTTER_WEB_DIR = os.environ.get('FLUTTER_WEB_DIR', '')
