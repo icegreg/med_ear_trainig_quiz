@@ -4,6 +4,8 @@ from django.contrib import admin
 from django.http import FileResponse, HttpResponseNotFound
 from django.urls import path, re_path
 
+from debug_toolbar.toolbar import debug_toolbar_urls
+
 from core.api import api
 from core.views import serve_protected_media
 
@@ -11,7 +13,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', api.urls),
     re_path(r'^media/(?P<path>.*)$', serve_protected_media),
-]
+] + debug_toolbar_urls()
 
 # Flutter SPA fallback — если FLUTTER_WEB_DIR задан,
 # все неизвестные URL отдают index.html (SPA routing)
