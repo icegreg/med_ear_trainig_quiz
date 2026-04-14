@@ -149,8 +149,7 @@ CORS_ALLOWED_ORIGINS = os.environ.get(
     'http://localhost:3000,http://localhost:8080,http://localhost',
 ).split(',')
 
-CORS_ALLOWED_ALL_ORIGINS = os.environ.get('CORS_ALLOWED_ALL_ORIGINS', 'False')
-
+CORS_ALLOWED_ALL_ORIGINS = os.environ.get('CORS_ALLOWED_ALL_ORIGINS', 'False').lower() in ('true', '1', 'yes')
 CORS_ALLOW_HEADERS = [
     'accept',
     'authorization',
