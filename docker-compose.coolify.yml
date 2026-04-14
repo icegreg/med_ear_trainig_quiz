@@ -25,6 +25,7 @@ services:
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
       - DATABASE_URL=${DATABASE_URL}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost}
+      - CORS_ALLOWED_ALL_ORIGINS=${CORS_ALLOWED_ALL_ORIGINS:-False}
       - AUTH_RATE_LIMIT=${AUTH_RATE_LIMIT:-5/m}
       - FLUTTER_WEB_DIR=/app/flutter_web
     volumes:
