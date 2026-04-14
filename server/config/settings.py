@@ -57,6 +57,8 @@ MIDDLEWARE = [
 
 ]
 
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://localhost', 'https://*.dev.webprods.ru']
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
