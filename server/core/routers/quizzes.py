@@ -85,6 +85,7 @@ def get_quiz_audio_files(request, quiz_id: int):
             'id': af.id,
             'title': af.title,
             'file': af.file.url,
+            'category_id': af.category_id,
             'duration_seconds': af.duration_seconds,
             'uploaded_at': af.uploaded_at,
         }

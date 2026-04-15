@@ -31,6 +31,10 @@ ALLOWED_HOSTS = os.environ.get(
 
 # Application definition
 
+import sys
+
+TESTING = 'test' in sys.argv
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -39,7 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'debug_toolbar',
     'core',
 ]
 
@@ -53,9 +56,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
-
 ]
+
+if DEBUG and not TESTING:
+    INSTALLED_APPS.append('debug_toolbar')
+    MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://localhost', 'https://*.dev.webprods.ru']
 

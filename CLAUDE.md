@@ -8,9 +8,9 @@ Medical hearing test platform (платформа тестирования сл�
 
 | Component | Tech Stack | Target |
 |-----------|-----------|--------|
-| `patient_app/` | Flutter | Android |
+| `patient_app/` | Flutter | Android / Web |
 | `server/` | Django Ninja + PostgreSQL | Backend + Admin |
-| `doctor_app/` | Flutter | Linux desktop |
+| `doctor_app/` | Flutter | Web |
 
 ## Build & Run
 
@@ -18,9 +18,11 @@ Medical hearing test platform (платформа тестирования сл�
 ```bash
 # Собрать Flutter web + поднять всё
 cd patient_app/ && flutter build web --dart-define=FLAVOR=dev && cd ..
+cd doctor_app/ && flutter build web --base-href=/doctors/ --dart-define=FLAVOR=dev && cd ..
 docker compose up -d --build
 
-# http://localhost      — Flutter app
+# http://localhost          — Patient app
+# http://localhost/doctors/ — Doctor app
 # http://localhost/api/docs — Swagger UI
 # http://localhost/admin    — Django admin (admin/admin)
 ```
@@ -44,8 +46,25 @@ python manage.py test core.tests.test_auth.DeviceTokenAuthTest.test_obtain_devic
 
 ### Flutter E2E tests (требует запущенный сервер)
 ```bash
+# Patient app API tests
 cd patient_app/
 flutter test test/api_integration_test.dart
+
+# Doctor app API tests
+cd doctor_app/
+flutter test test/api_integration_test.dart
+
+# Flutter integration tests (Chrome)
+cd doctor_app/ && flutter test integration_test --device-id chrome   # headless
+cd patient_app/ && flutter test integration_test --device-id chrome  # headless
+```
+
+### Selenium E2E tests (требует запущенный Docker)
+```bash
+cd e2e_tests/
+pip install -r requirements.txt
+E2E_HEADLESS=1 pytest                    # headless Chrome
+E2E_HEADLESS=0 pytest                    # обычный Chrome
 ```
 
 ### Генератор тестовых данных

@@ -1,9 +1,16 @@
-# Stage 1: Flutter web build
-FROM instrumentisto/flutter:3.24 AS flutter-build
+# Stage 1a: Patient Flutter web build
+FROM instrumentisto/flutter:3.24 AS patient-build
 WORKDIR /flutter
 COPY patient_app/ .
 RUN flutter pub get
 RUN flutter build web --dart-define=FLAVOR=dev --release
+
+# Stage 1b: Doctor Flutter web build
+FROM instrumentisto/flutter:3.24 AS doctor-build
+WORKDIR /flutter
+COPY doctor_app/ .
+RUN flutter pub get
+RUN flutter build web --base-href=/doctors/ --dart-define=FLAVOR=dev --release
 
 # Stage 2: Django app
 FROM python:3.12-slim
@@ -23,7 +30,8 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn
 COPY server/ .
 
 # Flutter web из stage 1
-COPY --from=flutter-build /flutter/build/web /app/flutter_web
+COPY --from=patient-build /flutter/build/web /app/flutter_web/patient
+COPY --from=doctor-build /flutter/build/web /app/flutter_web/doctor
 
 EXPOSE 8000
 

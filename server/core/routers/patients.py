@@ -18,6 +18,8 @@ def get_my_profile(request):
         'id': patient.id,
         'username': patient.user.username,
         'doctor_id': patient.doctor_id,
+        'starting_sound_id': patient.starting_sound_id,
+        'starting_sound_url': patient.starting_sound.file.url if patient.starting_sound else None,
         'created_at': patient.created_at,
     }
 

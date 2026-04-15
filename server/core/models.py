@@ -115,6 +115,14 @@ class Patient(models.Model):
         blank=True,
         related_name='patients',
     )
+    starting_sound = models.ForeignKey(
+        'AudioFile',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='starting_sound_patients',
+        verbose_name='Стартовый звук',
+        help_text='Звук, воспроизводимый перед каждым тестом пациента',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -125,10 +133,51 @@ class Patient(models.Model):
         return f'Пациент {self.user.username}'
 
 
+class AudioCategory(models.Model):
+    """Категория (папка) аудио-файлов. Поддерживает иерархию."""
+    name = models.CharField('Название', max_length=255)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='children',
+        verbose_name='Родительская категория',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Категория аудио'
+        verbose_name_plural = 'Категории аудио'
+        ordering = ['name']
+
+    def __str__(self):
+        parts = [self.name]
+        parent = self.parent
+        depth = 0
+        while parent and depth < 10:
+            parts.insert(0, parent.name)
+            parent = parent.parent
+            depth += 1
+        return ' / '.join(parts)
+
+    @classmethod
+    def get_default(cls):
+        """Возвращает (или создаёт) корневую категорию «Общая»."""
+        cat, _ = cls.objects.get_or_create(name='Общая', parent=None)
+        return cat
+
+
 class AudioFile(SoftDeleteMixin):
     """Аудио-файл, хранится на сервере. Удаление через маркировку."""
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to='audio/')
+    category = models.ForeignKey(
+        AudioCategory,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='audio_files',
+        verbose_name='Категория',
+    )
     duration_seconds = models.PositiveIntegerField(
         null=True, blank=True, help_text='Длительность в секундах'
     )
@@ -141,6 +190,11 @@ class AudioFile(SoftDeleteMixin):
     def __str__(self):
         prefix = '[УДАЛЁН] ' if self.is_deleted else ''
         return f'{prefix}{self.title}'
+
+    def save(self, *args, **kwargs):
+        if not self.category_id:
+            self.category = AudioCategory.get_default()
+        super().save(*args, **kwargs)
 
     def hard_delete(self, using=None, keep_parents=False):
         """Физическое удаление — файл с диска + запись из БД."""
@@ -308,3 +362,36 @@ class DeviceToken(models.Model):
 
     def __str__(self):
         return f'Token {self.token[:8]}... — {self.patient}'
+
+
+class Notification(models.Model):
+    """Уведомление для врача."""
+
+    class Type(models.TextChoices):
+        PATIENT_TRANSFERRED = 'patient_transferred', 'Пациент передан'
+        PATIENT_ADDED = 'patient_added', 'Пациент добавлен'
+        QUIZ_COMPLETED = 'quiz_completed', 'Тест пройден'
+
+    doctor = models.ForeignKey(
+        Doctor,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        verbose_name='Врач',
+    )
+    type = models.CharField(
+        'Тип', max_length=30,
+        choices=Type.choices,
+    )
+    message = models.TextField('Сообщение')
+    data = models.JSONField('Данные', default=dict, blank=True)
+    is_read = models.BooleanField('Прочитано', default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Уведомление'
+        verbose_name_plural = 'Уведомления'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        status = '✓' if self.is_read else '●'
+        return f'{status} {self.get_type_display()} — {self.doctor}'

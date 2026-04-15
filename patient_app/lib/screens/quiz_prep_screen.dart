@@ -2,10 +2,12 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 import '../core/audio_cache.dart';
 import '../core/storage.dart';
+import '../providers/patient_provider.dart';
 
 class QuizPrepScreen extends ConsumerStatefulWidget {
   final int quizId;
@@ -66,6 +68,30 @@ class _QuizPrepScreenState extends ConsumerState<QuizPrepScreen> {
       if (mounted) {
         setState(() => _downloadError = 'Ошибка загрузки аудио');
       }
+    }
+  }
+
+  Future<void> _startQuiz(BuildContext context) async {
+    // Воспроизвести стартовый звук, если назначен
+    try {
+      final patient = await ref.read(patientProvider.future);
+      if (patient.startingSoundUrl != null) {
+        final player = AudioPlayer();
+        try {
+          await player.setUrl(patient.startingSoundUrl!);
+          await player.play();
+          await player.playerStateStream.firstWhere(
+            (s) => s.processingState == ProcessingState.completed,
+          );
+        } finally {
+          await player.dispose();
+        }
+      }
+    } catch (_) {
+      // Не блокируем тест при ошибке воспроизведения стартового звука
+    }
+    if (mounted) {
+      context.pushReplacement('/quiz/${widget.quizId}/play');
     }
   }
 
@@ -136,7 +162,7 @@ class _QuizPrepScreenState extends ConsumerState<QuizPrepScreen> {
               ),
             ElevatedButton(
               onPressed: allReady
-                  ? () => context.pushReplacement('/quiz/${widget.quizId}/play')
+                  ? () => _startQuiz(context)
                   : null,
               child: const Text('Начать тест'),
             ),

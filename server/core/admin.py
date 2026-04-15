@@ -3,9 +3,11 @@ from django.contrib import admin, messages
 from django.contrib.auth.models import User
 
 from .models import (
+    AudioCategory,
     AudioFile,
     DeviceToken,
     Doctor,
+    Notification,
     Patient,
     PatientQuizAssignment,
     Quiz,
@@ -147,7 +149,7 @@ class CompletedQuizInline(admin.TabularInline):
 class PatientAdmin(admin.ModelAdmin):
     list_display = ['user', 'doctor', 'assigned_count', 'completed_count', 'created_at']
     list_filter = ['doctor']
-    raw_id_fields = ['user', 'doctor']
+    raw_id_fields = ['user', 'doctor', 'starting_sound']
     inlines = [AssignedQuizInline, CompletedQuizInline]
 
     def get_queryset(self, request):
@@ -172,14 +174,35 @@ class PatientAdmin(admin.ModelAdmin):
         return obj._completed_count
 
 
+# --- AudioCategory ---
+
+@admin.register(AudioCategory)
+class AudioCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'parent', 'audio_count', 'created_at']
+    search_fields = ['name']
+    list_filter = ['parent']
+    raw_id_fields = ['parent']
+
+    def get_queryset(self, request):
+        from django.db.models import Count
+        return super().get_queryset(request).annotate(
+            _audio_count=Count('audio_files'),
+        )
+
+    @admin.display(description='Аудио-файлов', ordering='_audio_count')
+    def audio_count(self, obj):
+        return obj._audio_count
+
+
 # --- AudioFile (soft delete) ---
 
 @admin.register(AudioFile)
 class AudioFileAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ['title', 'duration_seconds', 'uploaded_at', 'is_deleted_display', 'deleted_at', 'deleted_by']
+    list_display = ['title', 'category', 'duration_seconds', 'uploaded_at', 'is_deleted_display', 'deleted_at', 'deleted_by']
     search_fields = ['title']
-    list_filter = ['deleted_at']
+    list_filter = ['category', 'deleted_at']
     readonly_fields = ['deleted_at', 'deleted_by']
+    raw_id_fields = ['category']
     actions = ['restore_selected']
 
     @admin.display(description='Удалён', boolean=True)
@@ -245,3 +268,17 @@ class DeviceTokenAdmin(admin.ModelAdmin):
     @admin.display(description='Token')
     def token_short(self, obj):
         return f'{obj.token[:8]}...'
+
+
+# --- Notification ---
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['doctor', 'type', 'message_short', 'is_read', 'created_at']
+    list_filter = ['type', 'is_read', 'doctor']
+    readonly_fields = ['doctor', 'type', 'message', 'data', 'created_at']
+    search_fields = ['message']
+
+    @admin.display(description='Сообщение')
+    def message_short(self, obj):
+        return obj.message[:80] + '...' if len(obj.message) > 80 else obj.message
