@@ -20,32 +20,50 @@ if 'debug_toolbar' in settings.INSTALLED_APPS:
 
 # Flutter SPA fallback — если FLUTTER_WEB_DIR задан,
 # Django раздаёт patient app (/) и doctor app (/doctors/).
+#
+# Структура FLUTTER_WEB_DIR:
+#   flutter_web/patient/index.html  — patient app
+#   flutter_web/doctor/index.html   — doctor app
 _flutter_dir = os.environ.get('FLUTTER_WEB_DIR', '')
 if _flutter_dir:
-    def _doctor_spa_fallback(request, path=''):
-        """Doctor app — /doctors/*"""
-        doctor_dir = os.path.join(_flutter_dir, 'doctor')
-        # Пробуем отдать статический файл (js, css, assets)
-        file_path = os.path.join(doctor_dir, path)
+    import mimetypes
+
+    def _serve_flutter_file(base_dir, path):
+        """Отдать статический файл Flutter-приложения с правильным content-type."""
+        file_path = os.path.join(base_dir, path)
         if path and os.path.isfile(file_path):
-            return FileResponse(open(file_path, 'rb'))
-        # Иначе — SPA fallback на index.html
-        index = os.path.join(doctor_dir, 'index.html')
+            content_type, _ = mimetypes.guess_type(file_path)
+            return FileResponse(open(file_path, 'rb'), content_type=content_type)
+        return None
+
+    def _serve_flutter_index(base_dir):
+        """Отдать index.html Flutter-приложения (SPA fallback)."""
+        index = os.path.join(base_dir, 'index.html')
         if os.path.isfile(index):
             return FileResponse(open(index, 'rb'), content_type='text/html')
+        return None
+
+    _doctor_dir = os.path.join(_flutter_dir, 'doctor')
+    _patient_dir = os.path.join(_flutter_dir, 'patient')
+
+    def _doctor_spa_fallback(request, path=''):
+        """Doctor app — /doctors/*"""
+        resp = _serve_flutter_file(_doctor_dir, path)
+        if resp:
+            return resp
+        resp = _serve_flutter_index(_doctor_dir)
+        if resp:
+            return resp
         return HttpResponseNotFound('doctor app not found')
 
     def _patient_spa_fallback(request, path=''):
         """Patient app — /*"""
-        patient_dir = os.path.join(_flutter_dir, 'patient')
-        # Пробуем отдать статический файл
-        file_path = os.path.join(patient_dir, path)
-        if path and os.path.isfile(file_path):
-            return FileResponse(open(file_path, 'rb'))
-        # Иначе — SPA fallback
-        index = os.path.join(patient_dir, 'index.html')
-        if os.path.isfile(index):
-            return FileResponse(open(index, 'rb'), content_type='text/html')
+        resp = _serve_flutter_file(_patient_dir, path)
+        if resp:
+            return resp
+        resp = _serve_flutter_index(_patient_dir)
+        if resp:
+            return resp
         return HttpResponseNotFound('patient app not found')
 
     urlpatterns += [
