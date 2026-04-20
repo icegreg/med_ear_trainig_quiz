@@ -21,7 +21,16 @@ class StorageService {
   String? get deviceToken => _deviceTokenCache;
 
   Future<void> loadDeviceToken() async {
-    _deviceTokenCache = await _secure.read(key: 'device_token');
+    try {
+      _deviceTokenCache = await _secure.read(key: 'device_token');
+    } catch (_) {
+      // Битое/несовместимое хранилище (смена ключа шифрования, другая версия пакета).
+      // Сбрасываем, чтобы приложение запустилось — пользователь перелогинится.
+      try {
+        await _secure.deleteAll();
+      } catch (_) {}
+      _deviceTokenCache = null;
+    }
   }
 
   Future<void> setDeviceToken(String token) async {

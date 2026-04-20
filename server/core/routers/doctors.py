@@ -37,6 +37,7 @@ from ..schemas import (
     SetStartingSoundSchema,
     TransferPatientSchema,
     TransferResultSchema,
+    UpdatePatientSchema,
 )
 
 router = Router()
@@ -61,20 +62,55 @@ def list_doctors(request):
 # ─── Patients ───────────────────────────────────────────────────────────
 
 @router.get('/me/patients', response=list[PatientSchema])
-def get_my_patients(request):
-    """Список пациентов текущего врача."""
-    patients = request.doctor.patients.select_related('user', 'starting_sound').all()
-    return [
-        {
-            'id': p.id,
-            'username': p.user.username,
-            'doctor_id': p.doctor_id,
-            'starting_sound_id': p.starting_sound_id,
-            'starting_sound_url': p.starting_sound.file.url if p.starting_sound else None,
-            'created_at': p.created_at,
-        }
-        for p in patients
-    ]
+def get_my_patients(request, search: str | None = None):
+    """Список пациентов текущего врача. Поиск по фамилии/имени (icontains)."""
+    from django.db.models import Count, Q
+    qs = request.doctor.patients.select_related('user', 'starting_sound')
+    if search:
+        term = search.strip()
+        if term:
+            qs = qs.filter(
+                Q(last_name__icontains=term) | Q(first_name__icontains=term)
+            )
+    qs = qs.annotate(
+        _assigned_count=Count(
+            'quiz_assignments',
+            filter=Q(quiz_assignments__status=PatientQuizAssignment.Status.ASSIGNED),
+        ),
+        _completed_count=Count(
+            'quiz_assignments',
+            filter=Q(quiz_assignments__status=PatientQuizAssignment.Status.COMPLETED),
+        ),
+    ).order_by('last_name', 'first_name')
+    return [_patient_dict(p) for p in qs]
+
+
+def _patient_dict(p: Patient) -> dict:
+    assigned = getattr(p, '_assigned_count', None)
+    completed = getattr(p, '_completed_count', None)
+    if assigned is None:
+        assigned = p.quiz_assignments.filter(
+            status=PatientQuizAssignment.Status.ASSIGNED
+        ).count()
+    if completed is None:
+        completed = p.quiz_assignments.filter(
+            status=PatientQuizAssignment.Status.COMPLETED
+        ).count()
+    return {
+        'id': p.id,
+        'username': p.user.username,
+        'doctor_id': p.doctor_id,
+        'last_name': p.last_name,
+        'first_name': p.first_name,
+        'patronymic': p.patronymic,
+        'full_name': p.full_name,
+        'starting_sound_id': p.starting_sound_id,
+        'starting_sound_url': p.starting_sound.file.url if p.starting_sound else None,
+        'birth_date': p.birth_date,
+        'assigned_count': assigned,
+        'completed_count': completed,
+        'created_at': p.created_at,
+    }
 
 
 @router.post('/patients', response={200: CreatePatientResponseSchema, 400: ErrorSchema})
@@ -87,7 +123,14 @@ def create_patient(request, payload: CreatePatientSchema):
         username=payload.username,
         password=payload.password,
     )
-    patient = Patient.objects.create(user=user, doctor=request.doctor)
+    patient = Patient.objects.create(
+        user=user,
+        doctor=request.doctor,
+        last_name=payload.last_name,
+        first_name=payload.first_name,
+        patronymic=payload.patronymic,
+        birth_date=payload.birth_date,
+    )
     return 200, {'id': patient.id, 'username': user.username}
 
 
@@ -108,14 +151,26 @@ def set_starting_sound(request, patient_id: int, payload: SetStartingSoundSchema
         patient.starting_sound = None
 
     patient.save()
-    return 200, {
-        'id': patient.id,
-        'username': patient.user.username,
-        'doctor_id': patient.doctor_id,
-        'starting_sound_id': patient.starting_sound_id,
-        'starting_sound_url': patient.starting_sound.file.url if patient.starting_sound else None,
-        'created_at': patient.created_at,
-    }
+    return 200, _patient_dict(patient)
+
+
+@router.patch(
+    '/patients/{patient_id}',
+    response={200: PatientSchema, 404: ErrorSchema},
+)
+def update_patient(request, patient_id: int, payload: UpdatePatientSchema):
+    """Обновить данные пациента (ФИО, дата рождения)."""
+    patient = get_object_or_404(Patient, id=patient_id, doctor=request.doctor)
+    data = payload.dict(exclude_unset=True)
+    updatable = {'last_name', 'first_name', 'patronymic', 'birth_date'}
+    fields = []
+    for key, value in data.items():
+        if key in updatable:
+            setattr(patient, key, value if value is not None else (None if key == 'birth_date' else ''))
+            fields.append(key)
+    if fields:
+        patient.save(update_fields=fields)
+    return 200, _patient_dict(patient)
 
 
 # ─── Patient results ───────────────────────────────────────────────────
@@ -163,6 +218,22 @@ def get_patient_assignments(request, patient_id: int):
     ]
 
 
+@router.delete(
+    '/patients/{patient_id}/assignments/{assignment_id}',
+    response={200: ErrorSchema, 400: ErrorSchema, 404: ErrorSchema},
+)
+def unassign_quiz(request, patient_id: int, assignment_id: int):
+    """Снять назначение теста (только если не пройден)."""
+    patient = get_object_or_404(Patient, id=patient_id, doctor=request.doctor)
+    assignment = get_object_or_404(
+        PatientQuizAssignment, id=assignment_id, patient=patient,
+    )
+    if assignment.status == PatientQuizAssignment.Status.COMPLETED:
+        return 400, {'status': 'error', 'message': 'Нельзя снять пройденный тест.'}
+    assignment.delete()
+    return 200, {'status': 'ok', 'message': 'Назначение снято.'}
+
+
 @router.post(
     '/patients/{patient_id}/assign-quiz',
     response={200: AssignmentSchema, 400: ErrorSchema},
@@ -194,6 +265,29 @@ def assign_quiz(request, patient_id: int, payload: AssignQuizSchema):
 
 
 # ─── Quizzes ────────────────────────────────────────────────────────────
+
+@router.get('/quizzes/{quiz_id}/audio', response={200: list[AudioFileSchema], 404: ErrorSchema})
+def get_quiz_audio(request, quiz_id: int):
+    """Список аудио-файлов, входящих в тест (из audio_files и questions.audio_file)."""
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    audio_ids = set(quiz.audio_files.values_list('id', flat=True))
+    audio_ids.update(
+        quiz.questions.exclude(audio_file__isnull=True)
+        .values_list('audio_file_id', flat=True)
+    )
+    audio_files = AudioFile.objects.filter(id__in=audio_ids)
+    return 200, [
+        {
+            'id': af.id,
+            'title': af.title,
+            'file': af.file.url,
+            'category_id': af.category_id,
+            'duration_seconds': af.duration_seconds,
+            'uploaded_at': af.uploaded_at,
+        }
+        for af in audio_files
+    ]
+
 
 @router.get('/quizzes', response=list[QuizSummarySchema])
 def list_quizzes(request):

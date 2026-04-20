@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from ninja import Schema
@@ -29,14 +29,32 @@ class PatientSchema(Schema):
     id: int
     username: str
     doctor_id: UUID | None
+    last_name: str = ''
+    first_name: str = ''
+    patronymic: str = ''
+    full_name: str = ''
     starting_sound_id: int | None = None
     starting_sound_url: str | None = None
+    birth_date: date | None = None
+    assigned_count: int = 0
+    completed_count: int = 0
     created_at: datetime
 
 
 class CreatePatientSchema(Schema):
     username: str
     password: str
+    last_name: str = ''
+    first_name: str = ''
+    patronymic: str = ''
+    birth_date: date | None = None
+
+
+class UpdatePatientSchema(Schema):
+    last_name: str | None = None
+    first_name: str | None = None
+    patronymic: str | None = None
+    birth_date: date | None = None
 
 
 class CreatePatientResponseSchema(Schema):

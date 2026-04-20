@@ -91,15 +91,29 @@ class ApiClient {
 
   // ─── Patients ─────────────────────────────────────────
 
-  Future<List<dynamic>> getPatients() async {
-    final resp = await _dio.get('/doctors/me/patients');
+  Future<List<dynamic>> getPatients({String? search}) async {
+    final resp = await _dio.get(
+      '/doctors/me/patients',
+      queryParameters: {if (search != null && search.isNotEmpty) 'search': search},
+    );
     return resp.data;
   }
 
-  Future<Map<String, dynamic>> createPatient(String username, String password) async {
+  Future<Map<String, dynamic>> createPatient(
+    String username,
+    String password, {
+    String lastName = '',
+    String firstName = '',
+    String patronymic = '',
+    DateTime? birthDate,
+  }) async {
     final resp = await _dio.post('/doctors/patients', data: {
       'username': username,
       'password': password,
+      'last_name': lastName,
+      'first_name': firstName,
+      'patronymic': patronymic,
+      if (birthDate != null) 'birth_date': _dateToIso(birthDate),
     });
     return resp.data;
   }
@@ -111,6 +125,34 @@ class ApiClient {
     );
     return resp.data;
   }
+
+  Future<Map<String, dynamic>> updatePatient(
+    int patientId, {
+    String? lastName,
+    String? firstName,
+    String? patronymic,
+    Object? birthDate = _unset,
+  }) async {
+    final data = <String, dynamic>{};
+    if (lastName != null) data['last_name'] = lastName;
+    if (firstName != null) data['first_name'] = firstName;
+    if (patronymic != null) data['patronymic'] = patronymic;
+    if (!identical(birthDate, _unset)) {
+      data['birth_date'] = birthDate == null ? null : _dateToIso(birthDate as DateTime);
+    }
+    final resp = await _dio.patch('/doctors/patients/$patientId', data: data);
+    return resp.data;
+  }
+
+  Future<Map<String, dynamic>> setBirthDate(int patientId, DateTime? date) =>
+      updatePatient(patientId, birthDate: date);
+
+  static String _dateToIso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  static const _unset = Object();
 
   Future<Map<String, dynamic>> transferPatient(int patientId, String toDoctorId) async {
     final resp = await _dio.post('/doctors/transfer-patient', data: {
@@ -142,6 +184,15 @@ class ApiClient {
     if (startsAt != null) data['starts_at'] = startsAt;
     if (endsAt != null) data['ends_at'] = endsAt;
     final resp = await _dio.post('/doctors/patients/$patientId/assign-quiz', data: data);
+    return resp.data;
+  }
+
+  Future<void> unassignQuiz(int patientId, int assignmentId) async {
+    await _dio.delete('/doctors/patients/$patientId/assignments/$assignmentId');
+  }
+
+  Future<List<dynamic>> getQuizAudio(int quizId) async {
+    final resp = await _dio.get('/doctors/quizzes/$quizId/audio');
     return resp.data;
   }
 

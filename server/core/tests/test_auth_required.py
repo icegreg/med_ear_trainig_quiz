@@ -77,6 +77,14 @@ class AuthRequiredTest(TestCase):
         )
         self.assertEqual(resp.status_code, 401)
 
+    def test_doctor_update_patient_requires_auth(self):
+        resp = self.client.patch(
+            '/api/doctors/patients/1',
+            data='{"birth_date": "1990-01-01"}',
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 401)
+
     def test_doctor_quizzes_requires_auth(self):
         resp = self.client.get('/api/doctors/quizzes')
         self.assertEqual(resp.status_code, 401)
@@ -91,6 +99,14 @@ class AuthRequiredTest(TestCase):
 
     def test_doctor_assignments_requires_auth(self):
         resp = self.client.get('/api/doctors/patients/1/assignments')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_doctor_unassign_quiz_requires_auth(self):
+        resp = self.client.delete('/api/doctors/patients/1/assignments/1')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_doctor_quiz_audio_requires_auth(self):
+        resp = self.client.get('/api/doctors/quizzes/1/audio')
         self.assertEqual(resp.status_code, 401)
 
     def test_doctor_audio_library_requires_auth(self):

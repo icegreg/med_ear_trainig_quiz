@@ -147,10 +147,16 @@ class CompletedQuizInline(admin.TabularInline):
 
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-    list_display = ['user', 'doctor', 'assigned_count', 'completed_count', 'created_at']
+    list_display = ['full_name_display', 'user', 'doctor', 'birth_date', 'assigned_count', 'completed_count', 'created_at']
     list_filter = ['doctor']
+    search_fields = ['last_name', 'first_name', 'patronymic', 'user__username']
     raw_id_fields = ['user', 'doctor', 'starting_sound']
+    fields = ['user', 'doctor', 'last_name', 'first_name', 'patronymic', 'birth_date', 'starting_sound']
     inlines = [AssignedQuizInline, CompletedQuizInline]
+
+    @admin.display(description='ФИО', ordering='last_name')
+    def full_name_display(self, obj):
+        return obj.full_name or '—'
 
     def get_queryset(self, request):
         from django.db.models import Count, Q

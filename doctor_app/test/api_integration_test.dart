@@ -105,6 +105,16 @@ void main() {
       expect(resp.statusCode, 200);
       expect(resp.data, isList);
     });
+
+    test('PATCH /doctors/patients/{id} — set birth_date', () async {
+      final resp = await _dio.patch(
+        '/doctors/patients/$createdPatientId',
+        data: {'birth_date': '1988-07-21'},
+        options: Options(headers: {'Authorization': 'Bearer $_accessToken'}),
+      );
+      expect(resp.statusCode, 200);
+      expect(resp.data['birth_date'], '1988-07-21');
+    });
   });
 
   group('Audio Library', () {

@@ -8,12 +8,20 @@ from .models import DeviceToken, Doctor
 
 
 def serve_protected_media(request, path):
-    """Раздача медиа-файлов с проверкой аутентификации (device token или JWT)."""
+    """Раздача медиа-файлов с проверкой аутентификации (device token или JWT).
+
+    Токен может передаваться в заголовке `Authorization: Bearer <token>` либо
+    в query-параметре `?token=<token>` (нужно для HTML5 audio/video на web,
+    где кастомные заголовки не отправляются).
+    """
     auth_header = request.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+    else:
+        token = request.GET.get('token', '')
+    if not token:
         return HttpResponseForbidden('Требуется авторизация.')
 
-    token = auth_header[7:]
     authenticated = False
 
     # Проверка device token (пациент)

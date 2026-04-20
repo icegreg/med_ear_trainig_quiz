@@ -123,14 +123,25 @@ class Patient(models.Model):
         verbose_name='Стартовый звук',
         help_text='Звук, воспроизводимый перед каждым тестом пациента',
     )
+    last_name = models.CharField('Фамилия', max_length=150, blank=True)
+    first_name = models.CharField('Имя', max_length=150, blank=True)
+    patronymic = models.CharField('Отчество', max_length=150, blank=True)
+    birth_date = models.DateField('Дата рождения', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = 'Пациент'
         verbose_name_plural = 'Пациенты'
+        ordering = ['last_name', 'first_name']
 
     def __str__(self):
-        return f'Пациент {self.user.username}'
+        fio = self.full_name
+        return fio if fio else f'Пациент {self.user.username}'
+
+    @property
+    def full_name(self) -> str:
+        parts = [p for p in [self.last_name, self.first_name, self.patronymic] if p]
+        return ' '.join(parts)
 
 
 class AudioCategory(models.Model):

@@ -1,10 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
+import '../core/web_audio_player.dart';
 
 import '../models/audio_category.dart';
 import '../models/audio_file.dart';
+import '../core/media_auth.dart';
 import '../providers/auth_provider.dart';
 import '../providers/audio_library_provider.dart';
 
@@ -16,7 +17,7 @@ class AudioLibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _AudioLibraryScreenState extends ConsumerState<AudioLibraryScreen> {
-  final _player = AudioPlayer();
+  final _player = WebAudioPlayer();
   int? _playingId;
 
   @override
@@ -31,15 +32,16 @@ class _AudioLibraryScreenState extends ConsumerState<AudioLibraryScreen> {
   }
 
   Future<void> _playAudio(AudioFile audio) async {
+    _player.warmup();
     if (_playingId == audio.id) {
-      await _player.stop();
+      await _player.stopWithFadeOut();
       setState(() => _playingId = null);
       return;
     }
     try {
-      await _player.setUrl(audio.fileUrl);
+      final token = await ref.read(storageProvider).accessToken;
       setState(() => _playingId = audio.id);
-      await _player.play();
+      await _player.playWithFadeIn(withAuthToken(audio.fileUrl, token));
       if (mounted) setState(() => _playingId = null);
     } catch (_) {
       if (mounted) setState(() => _playingId = null);

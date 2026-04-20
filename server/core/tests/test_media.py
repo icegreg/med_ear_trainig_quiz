@@ -1,4 +1,6 @@
 """Тесты: медиа-файлы требуют аутентификации."""
+from core.auth import create_doctor_tokens
+
 from .helpers import APITestBase
 
 
@@ -6,6 +8,21 @@ class ProtectedMediaTest(APITestBase):
 
     def test_media_without_auth_returns_403(self):
         resp = self.client.get('/media/audio/test.wav')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_media_with_token_in_query_doctor(self):
+        tokens = create_doctor_tokens(self.doctor)
+        url = f"{self.audio.file.url}?token={tokens['access']}"
+        resp = self.client.get(url)
+        self.assertIn(resp.status_code, [200, 404])
+
+    def test_media_with_token_in_query_patient(self):
+        url = f"{self.audio.file.url}?token={self.device_token.token}"
+        resp = self.client.get(url)
+        self.assertIn(resp.status_code, [200, 404])
+
+    def test_media_with_invalid_token_in_query(self):
+        resp = self.client.get(f'{self.audio.file.url}?token=bad')
         self.assertEqual(resp.status_code, 403)
 
     def test_media_with_invalid_token_returns_403(self):

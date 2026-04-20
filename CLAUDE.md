@@ -35,13 +35,13 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-### Server tests
+### Server tests (PostgreSQL в docker)
+Запускать только внутри docker-контейнера (там подключён PostgreSQL `db`).
+SQLite не поддерживает case-insensitive поиск по кириллице (`icontains`).
 ```bash
-cd server/ && source ../server_venv/bin/activate
-
-python manage.py test core.tests                    # все
-python manage.py test core.tests.test_auth           # один файл
-python manage.py test core.tests.test_auth.DeviceTokenAuthTest.test_obtain_device_token_success  # один метод
+docker compose exec web python manage.py test core.tests                # все
+docker compose exec web python manage.py test core.tests.test_auth      # один файл
+docker compose exec web python manage.py test core.tests.test_auth.DeviceTokenAuthTest.test_obtain_device_token_success  # один метод
 ```
 
 ### Flutter E2E tests (требует запущенный сервер)

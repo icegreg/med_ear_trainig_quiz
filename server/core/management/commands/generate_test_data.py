@@ -212,21 +212,35 @@ class Command(BaseCommand):
         # Генерация пациентов
         self.stdout.write(self.style.MIGRATE_HEADING('Создание пациентов...'))
         patients = []
+        from datetime import date
+        today = date.today()
         for i in range(options['doctors'] * options['patients_per_doctor']):
             username = f'patient_{i + 1}'
             password = random_password()
             doctor = random.choice(doctors)
+            first = random.choice(FIRST_NAMES)
+            last = random.choice(LAST_NAMES)
+            patr = random.choice(PATRONYMICS)
+            age = random.randint(18, 85)
+            bd = date(today.year - age, random.randint(1, 12), random.randint(1, 28))
 
             user = User.objects.create_user(
                 username=username, password=password,
+                first_name=first, last_name=last,
             )
-            patient = Patient.objects.create(user=user, doctor=doctor)
+            patient = Patient.objects.create(
+                user=user, doctor=doctor,
+                last_name=last, first_name=first, patronymic=patr,
+                birth_date=bd,
+            )
             patients.append(patient)
             patient_creds.append({
                 'username': username,
                 'password': password,
                 'patient_id': patient.id,
                 'doctor': str(doctor),
+                'name': f'{last} {first} {patr}',
+                'birth_date': bd.isoformat(),
             })
             self.stdout.write(f'  {patient} → {doctor}')
 
