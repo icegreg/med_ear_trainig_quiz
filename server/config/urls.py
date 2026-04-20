@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.http import FileResponse, HttpResponseNotFound
 from django.urls import path, re_path
+from django.views.generic import RedirectView
 
 from core.api import api
 from core.views import serve_protected_media
@@ -67,6 +68,7 @@ if _flutter_dir:
         return HttpResponseNotFound('patient app not found')
 
     urlpatterns += [
+        path('doctors', RedirectView.as_view(url='/doctors/', permanent=True)),
         re_path(r'^doctors/(?P<path>.*)$', _doctor_spa_fallback),
-        re_path(r'^(?!api/|admin/|media/|static/|doctors/)(?P<path>.*)$', _patient_spa_fallback),
+        re_path(r'^(?!api/|admin/|media/|static/|doctors/?$|doctors/)(?P<path>.*)$', _patient_spa_fallback),
     ]
