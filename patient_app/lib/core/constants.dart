@@ -1,12 +1,17 @@
-/// Flavor передаётся через --dart-define=FLAVOR=dev|prod
+/// Flavor передаётся через --dart-define=FLAVOR=dev|prod|android-dev|android-prod
+///
+/// Конвенция (общая с doctor_app):
+///   dev          — локальный запуск (flutter run -d chrome): docker-compose на localhost
+///   prod         — деплой на web (Coolify, medear.ru): относительный /api, тот же origin
+///   android-dev  — Android-эмулятор: 10.0.2.2 = хост-машина
+///   android-prod — Android APK в проде: абсолютный URL продакшена
 const String kFlavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
 
-/// Дефолтные URL API по flavor (можно переопределить в настройках приложения)
-/// dev: localhost для web/desktop, 10.0.2.2 для Android-эмулятора
 const Map<String, String> kDefaultApiUrls = {
   'dev': '/api',
+  'prod': '/api',
   'android-dev': 'http://10.0.2.2/api',
-  'prod': 'https://api.medear.ru/api',
+  'android-prod': 'https://api.medear.ru/api',
 };
 
 String get kDefaultApiBaseUrl => kDefaultApiUrls[kFlavor] ?? kDefaultApiUrls['dev']!;

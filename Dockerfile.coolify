@@ -1,14 +1,13 @@
+# FLAVOR=prod для обоих — относительный /api (same-origin), работает на любом домене.
+
 # Stage 1a: Patient Flutter web build
-# FLAVOR=dev → API на /api (относительный); FLAVOR=prod у patient_app
-# забит на https://api.medear.ru и не годится для произвольного Coolify-домена.
 FROM instrumentisto/flutter:3.24 AS patient-build
 WORKDIR /flutter
 COPY patient_app/ .
 RUN flutter pub get
-RUN flutter build web --dart-define=FLAVOR=dev --release
+RUN flutter build web --dart-define=FLAVOR=prod --release
 
 # Stage 1b: Doctor Flutter web build
-# FLAVOR=prod → API на /api (относительный). FLAVOR=dev указывает на http://localhost/api.
 FROM instrumentisto/flutter:3.24 AS doctor-build
 WORKDIR /flutter
 COPY doctor_app/ .
