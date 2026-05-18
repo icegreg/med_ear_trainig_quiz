@@ -37,6 +37,15 @@ android {
             signingConfig = signingConfigs.debug
         }
     }
+
+    // Имя итогового APK: patient_app-<versionName>+<versionCode>-<buildType>.apk
+    // Например: patient_app-0.6.0+2-release.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            output.outputFileName =
+                "patient_app-${variant.versionName}+${variant.versionCode}-${variant.buildType.name}.apk"
+        }
+    }
 }
 
 flutter {
