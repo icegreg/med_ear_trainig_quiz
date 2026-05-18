@@ -30,6 +30,7 @@ services:
       - FLUTTER_WEB_DIR=/app/flutter_web
     volumes:
       - med-ear-media:/app/media
+      - med-ear-client-logs:/app/client_logs
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/docs\")'"]
       interval: 10s
@@ -48,3 +49,4 @@ services:
 
 volumes:
   med-ear-media:
+  med-ear-client-logs:
