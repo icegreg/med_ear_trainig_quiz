@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- В debug-сборке разрешаем cleartext HTTP, чтобы эмулятор мог ходить
+         к локальному docker-стенду (FLAVOR=android-dev → http://10.0.2.2/api).
+         В release-манифесте этого нет — production-трафик только по HTTPS. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
