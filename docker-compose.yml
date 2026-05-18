@@ -22,6 +22,7 @@ services:
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles
+      - client_logs_data:/app/client_logs
     depends_on:
       db:
         condition: service_healthy
@@ -47,3 +48,4 @@ volumes:
   postgres_data:
   media_data:
   static_data:
+  client_logs_data:
