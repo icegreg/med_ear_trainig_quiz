@@ -5,7 +5,7 @@
   <a href="{% url 'admin:index' %}">Главная</a>
   &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
   &rsaquo; <a href="{% url 'admin:core_patient_changelist' %}">Пациенты</a>
-  &rsaquo; <a href="{% url 'admin:core_patient_change' patient.pk %}">{{ patient }}</a>
+  &rsaquo; <a href="{{ patient_change_url }}">{{ patient }}</a>
   &rsaquo; Логи клиента
 </div>
 {% endblock %}
@@ -14,21 +14,57 @@
 <style>
   .log-meta { margin-bottom: 16px; color: #555; font-size: 13px; }
   .log-meta b { color: #000; }
-  .log-controls { margin-bottom: 12px; }
-  .log-controls a, .log-controls button { margin-right: 8px; }
-  .log-entry {
+  .log-controls { margin-bottom: 16px; }
+  .log-controls a { margin-right: 8px; }
+  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .log-table summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 10px;
+    display: grid;
+    grid-template-columns: 60px 200px 70px 1fr 80px 80px;
+    gap: 8px;
+    align-items: center;
+    border-top: 1px solid #eee;
+    font-family: monospace;
+  }
+  .log-table summary::-webkit-details-marker { display: none; }
+  .log-table details:hover summary { background: #f6f8fa; }
+  .log-table details[open] summary { background: #eaf3fb; border-left: 3px solid #79aec8; }
+  .log-index { color: #888; }
+  .log-method { font-weight: bold; color: #333; }
+  .log-path { color: #2a4a6a; word-break: break-all; }
+  .log-duration { color: #888; text-align: right; }
+  .log-status { font-weight: bold; text-align: center; padding: 2px 6px; border-radius: 3px; }
+  .log-status.ok          { background: #e7f5e7; color: #2a7a2a; }
+  .log-status.redirect    { background: #fff5d8; color: #7a5a00; }
+  .log-status.client-err  { background: #fde6e6; color: #a33; }
+  .log-status.server-err  { background: #f5c2c2; color: #700; }
+  .log-status.unknown     { background: #eee; color: #555; }
+  .log-error-msg { color: #a33; font-style: italic; font-size: 11px; padding: 4px 10px 0 76px; }
+  .log-full {
     background: #f6f6f6;
     border-left: 3px solid #79aec8;
-    margin-bottom: 6px;
-    padding: 8px 12px;
+    margin: 0;
+    padding: 12px 16px;
     font-family: monospace;
     font-size: 12px;
     white-space: pre-wrap;
     word-break: break-word;
-    max-height: 400px;
-    overflow: auto;
   }
-  .log-empty { color: #888; padding: 24px; text-align: center; }
+  .log-header {
+    display: grid;
+    grid-template-columns: 60px 200px 70px 1fr 80px 80px;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #f0f0f0;
+    border-bottom: 2px solid #ccc;
+    font-weight: bold;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #555;
+  }
+  .log-empty { color: #888; padding: 24px; text-align: center; background: #fafafa; border-radius: 4px; }
 </style>
 
 <h1>Логи клиента — {{ patient }}</h1>
@@ -36,23 +72,51 @@
 <div class="log-meta">
   Всего записей в файле: <b>{{ line_count }}</b> &nbsp;|&nbsp;
   Размер: <b>{{ file_size_kb|floatformat:1 }} KB</b> &nbsp;|&nbsp;
-  Показано последних: <b>{{ max_lines }}</b>
+  Показано: <b>{{ shown_count }}</b> (новые сверху)
 </div>
 
 <div class="log-controls">
+  <a class="button" href="{{ patient_change_url }}">← К пациенту</a>
   <a class="button" href="?lines=100">Последние 100</a>
   <a class="button" href="?lines=500">500</a>
   <a class="button" href="?lines=2000">2000</a>
-  <a class="button" href="{{ download_url }}">Скачать файл целиком</a>
+  <a class="button" href="{{ download_url }}">Скачать .jsonl целиком</a>
 </div>
 
-{% if lines %}
-  {% for line in lines %}
-    <div class="log-entry">{{ line }}</div>
-  {% endfor %}
+{% if entries %}
+  <div class="log-table">
+    <div class="log-header">
+      <div>#</div>
+      <div>Время (UTC)</div>
+      <div>Метод</div>
+      <div>Путь</div>
+      <div>Статус</div>
+      <div>Длительность</div>
+    </div>
+    {% for entry in entries %}
+      <details>
+        <summary>
+          <span class="log-index">#{{ entry.index }}</span>
+          <span class="log-ts">{{ entry.client_ts }}</span>
+          <span class="log-method">{{ entry.method }}</span>
+          <span class="log-path">{{ entry.path }}</span>
+          <span class="log-status {{ entry.status_class }}">
+            {% if entry.status_code %}{{ entry.status_code }}{% else %}—{% endif %}
+          </span>
+          <span class="log-duration">
+            {% if entry.duration_ms is not None %}{{ entry.duration_ms }}ms{% else %}—{% endif %}
+          </span>
+        </summary>
+        {% if entry.error_message %}
+          <div class="log-error-msg">⚠ {{ entry.error_message }}</div>
+        {% endif %}
+        <pre class="log-full">{{ entry.full_json }}</pre>
+      </details>
+    {% endfor %}
+  </div>
 {% else %}
   <div class="log-empty">
-    Лог пуст. Записи появятся, когда у пациента (или его врача) включено логирование
+    Журнал пуст. Записи появятся, когда у пациента (или его врача) включено логирование
     и приложение отправит первые запросы.
   </div>
 {% endif %}
