@@ -1,7 +1,12 @@
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.models import User
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
+from django.utils.html import format_html
 
+from . import client_logs
 from .models import (
     AudioCategory,
     AudioFile,
@@ -51,7 +56,7 @@ class DoctorCreationForm(forms.ModelForm):
 
     class Meta:
         model = Doctor
-        fields = ['last_name', 'first_name', 'patronymic', 'clinic']
+        fields = ['last_name', 'first_name', 'patronymic', 'clinic', 'logging_enabled']
 
     def save(self, commit=True):
         user = User.objects.create_user(
@@ -73,7 +78,7 @@ class DoctorChangeForm(forms.ModelForm):
 
     class Meta:
         model = Doctor
-        fields = ['last_name', 'first_name', 'patronymic', 'clinic']
+        fields = ['last_name', 'first_name', 'patronymic', 'clinic', 'logging_enabled']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -90,7 +95,8 @@ class DoctorChangeForm(forms.ModelForm):
 
 @admin.register(Doctor)
 class DoctorAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'clinic', 'email', 'created_at']
+    list_display = ['__str__', 'clinic', 'email', 'logging_enabled', 'created_at']
+    list_filter = ['logging_enabled']
     search_fields = ['last_name', 'first_name', 'clinic']
     readonly_fields = ['id', 'created_at']
 
@@ -147,11 +153,11 @@ class CompletedQuizInline(admin.TabularInline):
 
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-    list_display = ['full_name_display', 'user', 'doctor', 'birth_date', 'assigned_count', 'completed_count', 'created_at']
-    list_filter = ['doctor']
+    list_display = ['full_name_display', 'user', 'doctor', 'birth_date', 'assigned_count', 'completed_count', 'logging_enabled', 'logs_link', 'created_at']
+    list_filter = ['doctor', 'logging_enabled']
     search_fields = ['last_name', 'first_name', 'patronymic', 'user__username']
     raw_id_fields = ['user', 'doctor', 'starting_sound']
-    fields = ['user', 'doctor', 'last_name', 'first_name', 'patronymic', 'birth_date', 'starting_sound']
+    fields = ['user', 'doctor', 'last_name', 'first_name', 'patronymic', 'birth_date', 'starting_sound', 'logging_enabled']
     inlines = [AssignedQuizInline, CompletedQuizInline]
 
     @admin.display(description='ФИО', ordering='last_name')
@@ -178,6 +184,70 @@ class PatientAdmin(admin.ModelAdmin):
     @admin.display(description='Пройдено', ordering='_completed_count')
     def completed_count(self, obj):
         return obj._completed_count
+
+    @admin.display(description='Логи')
+    def logs_link(self, obj):
+        url = reverse('admin:core_patient_logs', args=[obj.pk])
+        size = client_logs.file_size(obj.pk)
+        if size == 0:
+            return format_html('<a href="{}">пусто</a>', url)
+        kb = size / 1024
+        return format_html('<a href="{}">{:.1f} KB</a>', url, kb)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<int:patient_id>/logs/',
+                self.admin_site.admin_view(self.view_logs),
+                name='core_patient_logs',
+            ),
+            path(
+                '<int:patient_id>/logs/download/',
+                self.admin_site.admin_view(self.download_logs),
+                name='core_patient_logs_download',
+            ),
+        ]
+        return custom + urls
+
+    def view_logs(self, request, patient_id):
+        patient = get_object_or_404(Patient, pk=patient_id)
+        max_lines = int(request.GET.get('lines', 500))
+        max_lines = max(10, min(max_lines, 10000))
+
+        lines = client_logs.read_tail(patient.pk, max_lines=max_lines)
+        # Парсим каждую строку как JSON для красивого отображения
+        import json as _json
+        parsed = []
+        for ln in lines:
+            try:
+                parsed.append(_json.dumps(_json.loads(ln), ensure_ascii=False, indent=2))
+            except Exception:
+                parsed.append(ln)
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Логи клиента — {patient}',
+            'patient': patient,
+            'lines': parsed,
+            'line_count': client_logs.line_count(patient.pk),
+            'file_size_kb': client_logs.file_size(patient.pk) / 1024,
+            'max_lines': max_lines,
+            'opts': self.model._meta,
+            'download_url': reverse('admin:core_patient_logs_download', args=[patient.pk]),
+        }
+        return render(request, 'admin/core/patient/client_logs.html', context)
+
+    def download_logs(self, request, patient_id):
+        patient = get_object_or_404(Patient, pk=patient_id)
+        path = client_logs.log_path(patient.pk)
+        if not path.exists():
+            raise Http404('Файл логов пуст')
+        return FileResponse(
+            open(path, 'rb'),
+            as_attachment=True,
+            filename=f'patient_{patient.pk}_logs.jsonl',
+        )
 
 
 # --- AudioCategory ---

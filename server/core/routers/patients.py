@@ -1,7 +1,10 @@
 from ninja import Router
 
+from .. import client_logs
 from ..models import QuizResult
 from ..schemas import (
+    ClientLogBatchSchema,
+    ClientLogResponseSchema,
     PatientSchema,
     QuizListSchema,
     QuizResultSchema,
@@ -20,6 +23,7 @@ def get_my_profile(request):
         'doctor_id': patient.doctor_id,
         'starting_sound_id': patient.starting_sound_id,
         'starting_sound_url': patient.starting_sound.file.url if patient.starting_sound else None,
+        'logging_enabled': patient.effective_logging_enabled,
         'created_at': patient.created_at,
     }
 
@@ -62,3 +66,19 @@ def get_my_results(request):
         }
         for r in results
     ]
+
+
+@router.post('/logs', response=ClientLogResponseSchema)
+def post_client_logs(request, batch: ClientLogBatchSchema):
+    """Принимает batch клиентских логов от приложения пациента.
+
+    Если у пациента (или его врача) логирование выключено — записи отбрасываются,
+    клиент получит {enabled: false} и должен прекратить отправку.
+    """
+    patient = request.patient
+    if not patient.effective_logging_enabled:
+        return {'enabled': False, 'accepted': 0}
+
+    entries = [e.dict() for e in batch.entries]
+    accepted = client_logs.append_entries(patient.id, entries)
+    return {'enabled': True, 'accepted': accepted}

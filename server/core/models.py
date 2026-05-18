@@ -88,6 +88,11 @@ class Doctor(models.Model):
     first_name = models.CharField('Имя', max_length=150)
     patronymic = models.CharField('Отчество', max_length=150, blank=True)
     clinic = models.CharField('Клиника', max_length=255, blank=True)
+    logging_enabled = models.BooleanField(
+        'Логирование клиента',
+        default=False,
+        help_text='Если включено, все пациенты этого врача отправляют клиентские логи на сервер',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -127,6 +132,11 @@ class Patient(models.Model):
     first_name = models.CharField('Имя', max_length=150, blank=True)
     patronymic = models.CharField('Отчество', max_length=150, blank=True)
     birth_date = models.DateField('Дата рождения', null=True, blank=True)
+    logging_enabled = models.BooleanField(
+        'Логирование клиента',
+        default=False,
+        help_text='Если включено, приложение пациента отправляет логи всех запросов на сервер',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -142,6 +152,14 @@ class Patient(models.Model):
     def full_name(self) -> str:
         parts = [p for p in [self.last_name, self.first_name, self.patronymic] if p]
         return ' '.join(parts)
+
+    @property
+    def effective_logging_enabled(self) -> bool:
+        """Логирование считается включённым, если включено у самого пациента
+        ИЛИ у его врача (массово)."""
+        if self.logging_enabled:
+            return True
+        return bool(self.doctor and self.doctor.logging_enabled)
 
 
 class AudioCategory(models.Model):

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/app_info_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/patient_provider.dart';
 
@@ -30,7 +31,9 @@ class ProfileScreen extends ConsumerWidget {
               label: 'Пользователь',
               value: p.username,
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 32),
+            const _AppInfoSection(),
+            const SizedBox(height: 32),
             OutlinedButton.icon(
               onPressed: () => _confirmLogout(context, ref),
               icon: const Icon(Icons.logout),
@@ -68,6 +71,48 @@ class ProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AppInfoSection extends ConsumerWidget {
+  const _AppInfoSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final info = ref.watch(appInfoProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'О приложении',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        info.when(
+          data: (i) => _InfoTile(
+            icon: Icons.info_outline,
+            label: 'Версия',
+            value: '${i.version} (build ${i.buildNumber})',
+          ),
+          loading: () => const _InfoTile(
+            icon: Icons.info_outline,
+            label: 'Версия',
+            value: '…',
+          ),
+          error: (_, __) => const _InfoTile(
+            icon: Icons.info_outline,
+            label: 'Версия',
+            value: 'неизвестно',
+          ),
+        ),
+      ],
     );
   }
 }

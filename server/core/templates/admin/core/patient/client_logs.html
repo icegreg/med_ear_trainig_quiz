@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Главная</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:core_patient_changelist' %}">Пациенты</a>
+  &rsaquo; <a href="{% url 'admin:core_patient_change' patient.pk %}">{{ patient }}</a>
+  &rsaquo; Логи клиента
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .log-meta { margin-bottom: 16px; color: #555; font-size: 13px; }
+  .log-meta b { color: #000; }
+  .log-controls { margin-bottom: 12px; }
+  .log-controls a, .log-controls button { margin-right: 8px; }
+  .log-entry {
+    background: #f6f6f6;
+    border-left: 3px solid #79aec8;
+    margin-bottom: 6px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow: auto;
+  }
+  .log-empty { color: #888; padding: 24px; text-align: center; }
+</style>
+
+<h1>Логи клиента — {{ patient }}</h1>
+
+<div class="log-meta">
+  Всего записей в файле: <b>{{ line_count }}</b> &nbsp;|&nbsp;
+  Размер: <b>{{ file_size_kb|floatformat:1 }} KB</b> &nbsp;|&nbsp;
+  Показано последних: <b>{{ max_lines }}</b>
+</div>
+
+<div class="log-controls">
+  <a class="button" href="?lines=100">Последние 100</a>
+  <a class="button" href="?lines=500">500</a>
+  <a class="button" href="?lines=2000">2000</a>
+  <a class="button" href="{{ download_url }}">Скачать файл целиком</a>
+</div>
+
+{% if lines %}
+  {% for line in lines %}
+    <div class="log-entry">{{ line }}</div>
+  {% endfor %}
+{% else %}
+  <div class="log-empty">
+    Лог пуст. Записи появятся, когда у пациента (или его врача) включено логирование
+    и приложение отправит первые запросы.
+  </div>
+{% endif %}
+{% endblock %}

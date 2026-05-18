@@ -38,7 +38,34 @@ class PatientSchema(Schema):
     birth_date: date | None = None
     assigned_count: int = 0
     completed_count: int = 0
+    logging_enabled: bool = False
     created_at: datetime
+
+
+class ClientLogEntrySchema(Schema):
+    """Одна запись клиентского лога (отдельный HTTP-запрос приложения)."""
+    client_ts: str
+    method: str
+    path: str
+    status_code: int | None = None
+    duration_ms: int | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    request_payload: dict | list | str | None = None
+    response_body: str | None = None
+    app_version: str | None = None
+    build_number: str | None = None
+    platform: str | None = None
+    flavor: str | None = None
+
+
+class ClientLogBatchSchema(Schema):
+    entries: list[ClientLogEntrySchema]
+
+
+class ClientLogResponseSchema(Schema):
+    enabled: bool
+    accepted: int = 0
 
 
 class CreatePatientSchema(Schema):

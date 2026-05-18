@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
+import 'log_buffer.dart';
 import 'storage.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -27,7 +28,17 @@ class ApiClient {
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+        options.extra['_log_started_at'] =
+            DateTime.now().millisecondsSinceEpoch;
         handler.next(options);
+      },
+      onResponse: (response, handler) {
+        _logRequest(
+          response.requestOptions,
+          statusCode: response.statusCode,
+          response: response,
+        );
+        handler.next(response);
       },
       onError: (error, handler) {
         if (error.response?.statusCode == 401) {
@@ -37,9 +48,49 @@ class ApiClient {
             _ref.read(authProvider.notifier).forceLogout();
           }
         }
+        _logRequest(
+          error.requestOptions,
+          statusCode: error.response?.statusCode,
+          response: error.response,
+          error: error,
+        );
         handler.next(error);
       },
     ));
+  }
+
+  void _logRequest(
+    RequestOptions options, {
+    int? statusCode,
+    Response? response,
+    DioException? error,
+  }) {
+    // Не логируем сам EP логов (LogBuffer.add его тоже отсеивает, но руками
+    // отсечь дешевле — не создавать LogBuffer для пустых вызовов).
+    if (options.path.endsWith(kLogEndpointPath)) return;
+
+    try {
+      final startedAt = options.extra['_log_started_at'] as int?;
+      final durationMs = startedAt == null
+          ? null
+          : DateTime.now().millisecondsSinceEpoch - startedAt;
+
+      final buffer = _ref.read(logBufferProvider);
+      buffer.add(
+        method: options.method,
+        path: options.path,
+        statusCode: statusCode,
+        durationMs: durationMs,
+        errorType: error?.type.name,
+        errorMessage: error?.message,
+        requestPayload: options.data,
+        responseBody: response?.data is String
+            ? response!.data as String
+            : (response?.data == null ? null : response!.data.toString()),
+      );
+    } catch (_) {
+      // Никогда не падать из-за логирования
+    }
   }
 
   /// Обновить baseUrl (после изменения в настройках)

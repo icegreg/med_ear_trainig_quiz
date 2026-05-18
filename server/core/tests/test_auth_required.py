@@ -21,6 +21,14 @@ class AuthRequiredTest(TestCase):
         resp = self.client.get('/api/patients/me/results')
         self.assertEqual(resp.status_code, 401)
 
+    def test_patients_logs_requires_auth(self):
+        resp = self.client.post(
+            '/api/patients/logs',
+            data='{"entries": []}',
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 401)
+
     # --- Quiz endpoints (device token) ---
 
     def test_quiz_detail_requires_auth(self):
@@ -222,6 +230,15 @@ class CrossAuthTest(APITestBase):
 
     def test_doctor_jwt_rejected_by_patients_results(self):
         resp = self.client.get('/api/patients/me/results', **self.doctor_headers())
+        self.assertEqual(resp.status_code, 401)
+
+    def test_doctor_jwt_rejected_by_patients_logs(self):
+        resp = self.client.post(
+            '/api/patients/logs',
+            data='{"entries": []}',
+            content_type='application/json',
+            **self.doctor_headers(),
+        )
         self.assertEqual(resp.status_code, 401)
 
     def test_doctor_jwt_rejected_by_quiz_detail(self):

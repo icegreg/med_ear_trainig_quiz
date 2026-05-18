@@ -4,6 +4,7 @@ class Patient {
   final String? doctorId;
   final int? startingSoundId;
   final String? startingSoundUrl;
+  final bool loggingEnabled;
   final DateTime createdAt;
 
   Patient({
@@ -12,6 +13,7 @@ class Patient {
     this.doctorId,
     this.startingSoundId,
     this.startingSoundUrl,
+    this.loggingEnabled = false,
     required this.createdAt,
   });
 
@@ -21,6 +23,7 @@ class Patient {
         doctorId: json['doctor_id'],
         startingSoundId: json['starting_sound_id'],
         startingSoundUrl: json['starting_sound_url'],
+        loggingEnabled: json['logging_enabled'] == true,
         createdAt: DateTime.parse(json['created_at']),
       );
 }

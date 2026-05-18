@@ -155,6 +155,10 @@ WHITENOISE_ROOT = FLUTTER_WEB_DIR if FLUTTER_WEB_DIR else None
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Клиентские логи пациентов: каталог с .jsonl-файлами (по файлу на пациента).
+# Не выкладывается под /media — читается только через админку.
+CLIENT_LOGS_DIR = BASE_DIR / 'client_logs'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS
