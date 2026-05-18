@@ -5,6 +5,7 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from . import client_logs
 
@@ -192,7 +193,7 @@ class PatientAdmin(admin.ModelAdmin):
         count = client_logs.line_count(obj.pk)
         size_kb = client_logs.file_size(obj.pk) / 1024
         if count == 0:
-            return format_html(
+            return mark_safe(
                 '<span style="color:#888;">Журнал пуст. Логи появятся, когда '
                 'у пациента включено логирование и приложение отправит запросы.</span>'
             )
