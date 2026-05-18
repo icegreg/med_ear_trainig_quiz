@@ -142,24 +142,21 @@ class ApiClient {
   }
 
   /// Скачать аудио-файл в bytes (с авторизацией).
-  /// [fileUrl] — относительный или абсолютный URL из AudioFile.file
+  /// [fileUrl] — относительный (`/media/audio/x.wav`) или абсолютный URL из AudioFile.file.
   /// [onProgress] — callback прогресса (0.0 - 1.0)
   Future<List<int>> downloadAudioFile(
     String fileUrl, {
     void Function(double)? onProgress,
   }) async {
-    // fileUrl приходит как "/media/audio/note_c4.wav"
-    // Нужен абсолютный запрос, минуя baseUrl (/api)
-    final url = fileUrl.startsWith('http') ? fileUrl : fileUrl;
+    // /media/... лежит вне /api, поэтому строим абсолютный URL от origin
+    // (Uri.resolve отбрасывает path baseUrl при absolute path аргументе).
+    final absoluteUrl = fileUrl.startsWith('http')
+        ? fileUrl
+        : Uri.parse(_dio.options.baseUrl).resolve(fileUrl).toString();
 
-    final response = await Dio().get<List<int>>(
-      url,
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: _storage.deviceToken != null
-            ? {'Authorization': 'Bearer ${_storage.deviceToken}'}
-            : null,
-      ),
+    final response = await _dio.get<List<int>>(
+      absoluteUrl,
+      options: Options(responseType: ResponseType.bytes),
       onReceiveProgress: (received, total) {
         if (total > 0 && onProgress != null) {
           onProgress(received / total);
