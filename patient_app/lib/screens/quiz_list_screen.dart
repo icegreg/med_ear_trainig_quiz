@@ -31,8 +31,6 @@ class QuizListScreen extends ConsumerWidget {
                 list.where((q) => q.isAvailable).toList();
             final upcoming =
                 list.where((q) => q.isUpcoming).toList();
-            final completed =
-                list.where((q) => q.isCompleted).toList();
             final expired =
                 list.where((q) => q.isExpired).toList();
 
@@ -50,10 +48,6 @@ class QuizListScreen extends ConsumerWidget {
                 if (expired.isNotEmpty) ...[
                   _SectionHeader('Просрочены', theme),
                   ...expired.map((q) => _QuizCard(quiz: q)),
-                ],
-                if (completed.isNotEmpty) ...[
-                  _SectionHeader('Пройдены', theme),
-                  ...completed.map((q) => _QuizCard(quiz: q)),
                 ],
               ],
             );

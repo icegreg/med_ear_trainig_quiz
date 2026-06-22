@@ -12,7 +12,6 @@ import 'screens/quiz_done_screen.dart';
 import 'screens/quiz_list_screen.dart';
 import 'screens/quiz_play_screen.dart';
 import 'screens/quiz_prep_screen.dart';
-import 'screens/results_screen.dart';
 import 'screens/settings_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -63,10 +62,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/quizzes',
             builder: (context, state) => const QuizListScreen(),
-          ),
-          GoRoute(
-            path: '/results',
-            builder: (context, state) => const ResultsScreen(),
           ),
           GoRoute(
             path: '/profile',
@@ -125,11 +120,6 @@ class ScaffoldWithNav extends StatelessWidget {
             label: 'Тесты',
           ),
           NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart),
-            label: 'Результаты',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
             label: 'Профиль',
@@ -142,8 +132,7 @@ class ScaffoldWithNav extends StatelessWidget {
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/quizzes')) return 1;
-    if (location.startsWith('/results')) return 2;
-    if (location.startsWith('/profile')) return 3;
+    if (location.startsWith('/profile')) return 2;
     return 0;
   }
 
@@ -154,8 +143,6 @@ class ScaffoldWithNav extends StatelessWidget {
       case 1:
         context.go('/quizzes');
       case 2:
-        context.go('/results');
-      case 3:
         context.go('/profile');
     }
   }

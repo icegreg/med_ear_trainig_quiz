@@ -7,7 +7,10 @@ import '../models/quiz.dart';
 final quizListProvider = FutureProvider<List<QuizListItem>>((ref) async {
   final api = ref.watch(apiClientProvider);
   final data = await api.getMyQuizzes();
-  return data.map((q) => QuizListItem.fromJson(q)).toList();
+  return data
+      .map((q) => QuizListItem.fromJson(q))
+      .where((q) => !q.isCompleted)
+      .toList();
 });
 
 final quizDetailProvider =

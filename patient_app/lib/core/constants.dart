@@ -19,4 +19,3 @@ const Map<String, String> kDefaultApiUrls = {
 String get kDefaultApiBaseUrl => kDefaultApiUrls[kFlavor] ?? kDefaultApiUrls['dev']!;
 
 const double kDefaultBatteryThreshold = 20.0;
-const double kDefaultVolume = 0.8;

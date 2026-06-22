@@ -69,21 +69,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
           ),
 
-          const SizedBox(height: 8),
-          Text('Уровень громкости: '
-              '${(storage.volumeLevel * 100).round()}%'),
-          Slider(
-            value: storage.volumeLevel,
-            min: 0.1,
-            max: 1.0,
-            divisions: 9,
-            label: '${(storage.volumeLevel * 100).round()}%',
-            onChanged: (v) async {
-              await storage.setVolumeLevel(v);
-              setState(() {});
-            },
-          ),
-
           const Divider(height: 32),
           Text('Подключение', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),

@@ -125,11 +125,6 @@ class ApiClient {
     return response.data;
   }
 
-  Future<List<dynamic>> getMyResults() async {
-    final response = await _dio.get('/patients/me/results');
-    return response.data;
-  }
-
   // Quizzes
   Future<Map<String, dynamic>> getQuizDetail(int quizId) async {
     final response = await _dio.get('/quizzes/$quizId');
