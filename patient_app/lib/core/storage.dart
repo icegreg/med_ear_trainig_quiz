@@ -63,11 +63,6 @@ class StorageService {
   Future<void> setBatteryThreshold(double value) =>
       _prefs.setDouble('battery_threshold', value);
 
-  double get volumeLevel =>
-      _prefs.getDouble('volume_level') ?? kDefaultVolume;
-  Future<void> setVolumeLevel(double value) =>
-      _prefs.setDouble('volume_level', value);
-
   bool get isDarkMode => _prefs.getBool('dark_mode') ?? false;
   Future<void> setDarkMode(bool value) => _prefs.setBool('dark_mode', value);
 

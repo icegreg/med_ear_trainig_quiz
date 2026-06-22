@@ -115,27 +115,26 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
     }
 
     final total = _quiz!.questions.length;
-    final question = _quiz!.questions[_currentIndex];
-    final progress = (_currentIndex + 1) / total;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            LinearProgressIndicator(value: progress, minHeight: 6),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
               child: Text(
-                'Вопрос ${_currentIndex + 1} из $total',
+                _quiz!.title,
                 style: theme.textTheme.headlineMedium,
+                textAlign: TextAlign.center,
               ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(
-                question.text,
-                style: theme.textTheme.bodyLarge,
-                textAlign: TextAlign.center,
+                'Звук ${_currentIndex + 1} из $total',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -160,42 +159,41 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
             else
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 120,
-                      child: FilledButton(
-                        onPressed: () => _answer('да'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                child: SizedBox(
+                  height: 240,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => _answer('да'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.green.shade600,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                           ),
+                          child: const Text('Слышу',
+                              style: TextStyle(
+                                  fontSize: 32, fontWeight: FontWeight.bold)),
                         ),
-                        child: const Text('ДА',
-                            style: TextStyle(
-                                fontSize: 36, fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 120,
-                      child: FilledButton(
-                        onPressed: () => _answer('нет'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red.shade600,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => _answer('нет'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.red.shade600,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                           ),
+                          child: const Text('Не слышу',
+                              style: TextStyle(
+                                  fontSize: 32, fontWeight: FontWeight.bold)),
                         ),
-                        child: const Text('НЕТ',
-                            style: TextStyle(
-                                fontSize: 36, fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             const SizedBox(height: 32),

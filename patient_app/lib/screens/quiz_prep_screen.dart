@@ -53,9 +53,7 @@ class _QuizPrepScreenState extends ConsumerState<QuizPrepScreen> {
 
   Future<void> _setVolume() async {
     try {
-      final storage = ref.read(storageProvider);
-      final volume = storage.volumeLevel;
-      await VolumeController.instance.setVolume(volume);
+      await VolumeController.instance.setVolume(1.0);
     } catch (_) {}
     if (mounted) setState(() => _volumeSet = true);
   }

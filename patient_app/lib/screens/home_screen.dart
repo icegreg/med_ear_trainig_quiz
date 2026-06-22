@@ -45,7 +45,6 @@ class HomeScreen extends ConsumerWidget {
               data: (list) {
                 final available = list.where((q) => q.isAvailable).length;
                 final upcoming = list.where((q) => q.isUpcoming).length;
-                final completed = list.where((q) => q.isCompleted).length;
                 final deadlineSoon =
                     list.where((q) => q.isDeadlineSoon).toList();
 
@@ -90,14 +89,6 @@ class HomeScreen extends ConsumerWidget {
                         onTap: () => context.go('/quizzes'),
                       ),
                     ],
-                    const SizedBox(height: 12),
-                    _StatCard(
-                      icon: Icons.check_circle,
-                      title: 'Пройдено',
-                      value: '$completed',
-                      color: Colors.green,
-                      onTap: () => context.go('/results'),
-                    ),
                   ],
                 );
               },
