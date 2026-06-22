@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -51,6 +52,7 @@ class DeviceTokenRequest(Schema):
 class DeviceTokenResponse(Schema):
     token: str
     patient_id: int
+    expires_at: datetime
 
 
 @router.post('/device-token', response={200: DeviceTokenResponse, 401: ErrorSchema})
@@ -88,7 +90,11 @@ def obtain_device_token(request, payload: DeviceTokenRequest):
         'Patient login: username=%s patient_id=%s ip=%s',
         payload.username, patient.id, ip,
     )
-    return 200, {'token': device_token.token, 'patient_id': patient.id}
+    return 200, {
+        'token': device_token.token,
+        'patient_id': patient.id,
+        'expires_at': device_token.expires_at,
+    }
 
 
 # --- JWT (врач) ---

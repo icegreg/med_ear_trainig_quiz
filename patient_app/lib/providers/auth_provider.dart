@@ -41,6 +41,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       await _storage.setDeviceToken(data['token']);
       await _storage.setPatientId(data['patient_id']);
+      if (data['expires_at'] != null) {
+        await _storage.setTokenExpiresAt(data['expires_at']);
+      }
       await _storage.setLastUsername(username);
       state = const AuthState(status: AuthStatus.authenticated);
     } catch (e) {
@@ -53,6 +56,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _storage.clearDeviceToken();
+    // Явный выход убирает и код быстрого входа.
+    await _storage.clearPin();
     // lastUsername НЕ очищаем — для автозаполнения
     state = const AuthState(status: AuthStatus.unauthenticated);
   }

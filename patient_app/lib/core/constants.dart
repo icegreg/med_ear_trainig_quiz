@@ -19,3 +19,12 @@ const Map<String, String> kDefaultApiUrls = {
 String get kDefaultApiBaseUrl => kDefaultApiUrls[kFlavor] ?? kDefaultApiUrls['dev']!;
 
 const double kDefaultBatteryThreshold = 20.0;
+
+/// Сколько приложение может пробыть в фоне, прежде чем потребует код доступа.
+const Duration kAutoLockTimeout = Duration(minutes: 5);
+
+/// Длина цифрового кода быстрого входа.
+const int kPinLength = 4;
+
+/// Максимум попыток ввода ПИН до требования входа по паролю.
+const int kMaxPinAttempts = 5;

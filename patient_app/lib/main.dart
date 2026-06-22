@@ -11,7 +11,7 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   const secure = FlutterSecureStorage();
   final storage = StorageService(prefs, secure);
-  await storage.loadDeviceToken();
+  await storage.loadSecureData();
 
   runApp(
     ProviderScope(

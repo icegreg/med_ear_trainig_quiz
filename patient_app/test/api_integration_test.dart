@@ -59,6 +59,8 @@ void main() {
       expect(resp.statusCode, 200);
       expect(resp.data['token'], isNotEmpty);
       expect(resp.data['patient_id'], isA<int>());
+      // Токен живёт 3 месяца — сервер отдаёт срок действия.
+      expect(resp.data['expires_at'], isNotEmpty);
 
       deviceToken = resp.data['token'];
       patientId = resp.data['patient_id'];

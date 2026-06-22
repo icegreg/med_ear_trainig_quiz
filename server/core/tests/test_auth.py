@@ -20,6 +20,37 @@ class DeviceTokenAuthTest(APITestBase):
         data = resp.json()
         self.assertIn('token', data)
         self.assertEqual(data['patient_id'], self.patient.id)
+        self.assertIn('expires_at', data)
+
+    def test_obtain_device_token_expires_in_3_months(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import DeviceToken
+
+        resp = self.client.post(
+            '/api/auth/device-token',
+            data=json.dumps({'username': 'patient1', 'password': 'patpass123'}),
+            content_type='application/json',
+        )
+        token = DeviceToken.objects.get(token=resp.json()['token'])
+        delta = token.expires_at - timezone.now()
+        self.assertGreater(delta, timedelta(days=89))
+        self.assertLess(delta, timedelta(days=91))
+
+    def test_expired_device_token_rejected(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.device_token.expires_at = timezone.now() - timedelta(seconds=1)
+        self.device_token.save()
+        resp = self.client.get('/api/patients/me', **self.patient_headers())
+        self.assertEqual(resp.status_code, 401)
+        # cleanup
+        self.device_token.expires_at = timezone.now() + timedelta(days=90)
+        self.device_token.save()
 
     def test_obtain_device_token_wrong_password(self):
         resp = self.client.post(
