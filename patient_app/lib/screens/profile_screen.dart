@@ -42,6 +42,15 @@ class ProfileScreen extends ConsumerWidget {
               value: p.username,
             ),
             const SizedBox(height: 32),
+            OutlinedButton.icon(
+              onPressed: () => context.push('/change-password'),
+              icon: const Icon(Icons.lock_reset),
+              label: const Text('Сменить пароль'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 56),
+              ),
+            ),
+            const SizedBox(height: 32),
             const _AppInfoSection(),
             const SizedBox(height: 32),
             OutlinedButton.icon(

@@ -125,6 +125,16 @@ class ApiClient {
     return response.data;
   }
 
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _dio.post('/patients/me/change-password', data: {
+      'old_password': oldPassword,
+      'new_password': newPassword,
+    });
+  }
+
   // Quizzes
   Future<Map<String, dynamic>> getQuizDetail(int quizId) async {
     final response = await _dio.get('/quizzes/$quizId');

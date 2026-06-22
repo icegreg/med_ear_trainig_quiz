@@ -1,13 +1,18 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from ninja import Router
 
 from .. import client_logs
 from ..models import QuizResult
 from ..schemas import (
+    ChangePasswordSchema,
     ClientLogBatchSchema,
     ClientLogResponseSchema,
+    ErrorSchema,
     PatientSchema,
     QuizListSchema,
     QuizResultSchema,
+    ResultConfirmationSchema,
 )
 
 router = Router()
@@ -66,6 +71,34 @@ def get_my_results(request):
         }
         for r in results
     ]
+
+
+@router.post(
+    '/me/change-password',
+    response={200: ResultConfirmationSchema, 400: ErrorSchema},
+)
+def change_password(request, payload: ChangePasswordSchema):
+    """Смена пароля текущего пациента: проверка старого + установка нового."""
+    user = request.patient.user
+
+    if not user.check_password(payload.old_password):
+        return 400, {'status': 'error', 'message': 'Неверный текущий пароль.'}
+
+    if payload.new_password == payload.old_password:
+        return 400, {
+            'status': 'error',
+            'message': 'Новый пароль должен отличаться от текущего.',
+        }
+
+    try:
+        validate_password(payload.new_password, user=user)
+    except ValidationError as exc:
+        return 400, {'status': 'error', 'message': ' '.join(exc.messages)}
+
+    user.set_password(payload.new_password)
+    user.save(update_fields=['password'])
+
+    return 200, {'status': 'ok', 'message': 'Пароль успешно изменён.'}
 
 
 @router.post('/logs', response=ClientLogResponseSchema)

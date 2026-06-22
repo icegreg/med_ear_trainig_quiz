@@ -93,6 +93,11 @@ class SetStartingSoundSchema(Schema):
     audio_file_id: int | None = None
 
 
+class ChangePasswordSchema(Schema):
+    old_password: str
+    new_password: str
+
+
 # --- Audio Category ---
 
 class AudioCategorySchema(Schema):

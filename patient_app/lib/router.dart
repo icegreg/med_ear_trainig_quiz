@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'core/storage.dart';
 import 'providers/auth_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/change_password_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/profile_screen.dart';
@@ -92,6 +93,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/change-password',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
     ],
   );
