@@ -315,4 +315,62 @@ void main() {
       expect(resp.statusCode, 401);
     });
   });
+
+  // ============================================================
+  // 9. СМЕНА ПАРОЛЯ
+  // ============================================================
+
+  group('9. Смена пароля', () {
+    const newPassword = 'newE2ePass789';
+
+    // Откатываем пароль на исходный, чтобы повторные прогоны проходили.
+    // device token остаётся валидным после смены пароля, поэтому им же
+    // и пользуемся для отката. Если смена пароля не прошла (пароль всё ещё
+    // исходный) — откат вернёт 400 и оставит состояние как было.
+    tearDownAll(() async {
+      await authedDio().post('/patients/me/change-password', data: {
+        'old_password': newPassword,
+        'new_password': 'patpass123',
+      });
+    });
+
+    test('неверный текущий пароль → 400', () async {
+      final resp = await authedDio().post('/patients/me/change-password',
+          data: {'old_password': 'wrongpass', 'new_password': newPassword});
+      expect(resp.statusCode, 400);
+    });
+
+    test('слишком слабый новый пароль → 400', () async {
+      final resp = await authedDio().post('/patients/me/change-password',
+          data: {'old_password': 'patpass123', 'new_password': '123'});
+      expect(resp.statusCode, 400);
+    });
+
+    test('новый пароль совпадает с текущим → 400', () async {
+      final resp = await authedDio().post('/patients/me/change-password',
+          data: {'old_password': 'patpass123', 'new_password': 'patpass123'});
+      expect(resp.statusCode, 400);
+    });
+
+    test('успешная смена пароля → 200 + ok', () async {
+      final resp = await authedDio().post('/patients/me/change-password',
+          data: {'old_password': 'patpass123', 'new_password': newPassword});
+      expect(resp.statusCode, 200);
+      expect(resp.data['status'], 'ok');
+    });
+
+    test('старый device token остаётся валидным', () async {
+      final resp = await authedDio().get('/patients/me');
+      expect(resp.statusCode, 200);
+    });
+
+    test('логин с новым паролем → 200', () async {
+      final resp = await dio.post('/auth/device-token', data: {
+        'username': 'testpatient',
+        'password': newPassword,
+      });
+      expect(resp.statusCode, 200);
+      expect(resp.data['token'], isNotEmpty);
+    });
+  });
 }
