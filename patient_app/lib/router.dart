@@ -31,7 +31,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final path = state.matchedLocation;
 
       if (!isOnboarded && path != '/onboarding') return '/onboarding';
-      if (!isAuth && path != '/login' && path != '/onboarding') return '/login';
+      // /settings доступен и без авторизации — нужен для смены API URL,
+      // когда дефолтный недоступен или указан неверно.
+      if (!isAuth &&
+          path != '/login' &&
+          path != '/onboarding' &&
+          path != '/settings') {
+        return '/login';
+      }
       if (isAuth && (path == '/login' || path == '/onboarding')) return '/';
 
       return null;
