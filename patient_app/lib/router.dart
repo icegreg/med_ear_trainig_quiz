@@ -22,14 +22,18 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
-  final locked = ref.watch(lockProvider);
-  final storage = ref.watch(storageProvider);
-
+  // Роутер создаётся ОДИН раз. Изменения auth/lock прокидываются через
+  // refreshListenable — это перевычисляет redirect, НЕ пересоздавая GoRouter
+  // (иначе навигация сбрасывалась бы на initialLocation и перебивала, например,
+  // переход на /pin-setup сразу после логина).
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
+    refreshListenable: _RouterRefresh(ref),
     redirect: (context, state) {
+      final authState = ref.read(authProvider);
+      final locked = ref.read(lockProvider);
+      final storage = ref.read(storageProvider);
       final isAuth = authState.status == AuthStatus.authenticated;
       final isOnboarded = storage.onboardingCompleted;
       final hasPin = storage.hasPin;
@@ -135,6 +139,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Прокидывает изменения auth/lock в go_router без пересоздания роутера.
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(Ref ref) {
+    ref.listen(authProvider, (_, __) => notifyListeners());
+    ref.listen(lockProvider, (_, __) => notifyListeners());
+  }
+}
 
 class ScaffoldWithNav extends StatelessWidget {
   final Widget child;
