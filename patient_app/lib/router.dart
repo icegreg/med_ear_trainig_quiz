@@ -7,7 +7,7 @@ import 'providers/auth_provider.dart';
 import 'providers/lock_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/change_password_screen.dart';
-import 'screens/lock_screen.dart';
+// LockScreen рендерится оверлеем в app.dart (не как маршрут).
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/pin_setup_screen.dart';
@@ -50,22 +50,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      // Авторизован, но приложение заблокировано (cold start / таймаут в фоне).
+      // Авторизован, но приложение заблокировано (cold start / таймаут).
       if (locked) {
-        if (hasPin) {
-          // Быстрый вход по коду; пароль и настройки остаются доступны.
-          if (path == '/lock' || path == '/login' || path == '/settings') {
-            return null;
-          }
-          return '/lock';
-        }
+        // Есть PIN — НЕ редиректим: код вводится оверлеем поверх текущего
+        // экрана (см. app.dart), поэтому маршрут и состояние сохраняются.
+        if (hasPin) return null;
         // Кода нет — требуется вход по паролю.
         if (path == '/login' || path == '/settings') return null;
         return '/login';
       }
 
       // Авторизован и разблокирован — нет смысла оставаться на экранах входа.
-      if (path == '/login' || path == '/onboarding' || path == '/lock') {
+      if (path == '/login' || path == '/onboarding') {
         return '/';
       }
 
@@ -79,10 +75,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/lock',
-        builder: (context, state) => const LockScreen(),
       ),
       GoRoute(
         path: '/pin-setup',

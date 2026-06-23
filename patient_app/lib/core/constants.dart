@@ -23,6 +23,10 @@ const double kDefaultBatteryThreshold = 20.0;
 /// Сколько приложение может пробыть в фоне, прежде чем потребует код доступа.
 const Duration kAutoLockTimeout = Duration(minutes: 5);
 
+/// Сколько приложение может простаивать на переднем плане (без действий
+/// пользователя), прежде чем заблокируется.
+const Duration kIdleLockTimeout = Duration(minutes: 10);
+
 /// Длина цифрового кода быстрого входа.
 const int kPinLength = 4;
 

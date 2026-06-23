@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../core/constants.dart';
 import '../core/storage.dart';
+import '../providers/auth_provider.dart';
 import '../providers/lock_provider.dart';
 import '../widgets/pin_input.dart';
 
-/// Экран быстрого входа по ПИН-коду (показывается, когда токен жив,
-/// но приложение заблокировано и установлен код доступа).
+/// Оверлей быстрого входа по ПИН-коду (показывается поверх текущего экрана,
+/// когда токен жив, но приложение заблокировано и установлен код доступа).
 class LockScreen extends ConsumerStatefulWidget {
   const LockScreen({super.key});
 
@@ -24,20 +24,19 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   void _onCompleted(String pin) {
     final storage = ref.read(storageProvider);
     if (storage.verifyPin(pin)) {
+      // Снимаем оверлей — низлежащий экран остаётся в прежнем состоянии.
       ref.read(lockProvider.notifier).unlock();
-      context.go('/');
       return;
     }
 
     _attempts++;
     if (_attempts >= kMaxPinAttempts) {
-      // Забыл код — отправляем на вход по паролю.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Слишком много попыток. Войдите по паролю.'),
         ),
       );
-      context.go('/login');
+      _fallbackToPassword();
       return;
     }
 
@@ -45,6 +44,13 @@ class _LockScreenState extends ConsumerState<LockScreen> {
       _error = true;
       _value = '';
     });
+  }
+
+  /// Забыл код — полный выход, чтобы войти по паролю (редирект на /login
+  /// произойдёт автоматически после сброса авторизации).
+  void _fallbackToPassword() {
+    ref.read(authProvider.notifier).logout();
+    ref.read(lockProvider.notifier).unlock();
   }
 
   @override
@@ -89,7 +95,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                 ),
                 const SizedBox(height: 24),
                 TextButton(
-                  onPressed: () => context.go('/login'),
+                  onPressed: _fallbackToPassword,
                   child: const Text('Забыли код? Войти по паролю'),
                 ),
               ],
