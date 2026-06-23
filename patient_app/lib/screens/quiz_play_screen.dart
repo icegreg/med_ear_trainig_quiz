@@ -200,8 +200,11 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: SizedBox(
-                  height: 480,
+                  height: 160,
                   child: Row(
+                    // stretch — чтобы кнопки реально заполняли высоту SizedBox,
+                    // а не центрировались в нём с «родным» размером.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         child: FilledButton(
