@@ -51,40 +51,62 @@ class AudioCacheNotifier extends StateNotifier<AudioCacheState> {
     }
 
     final totalFiles = audioList.length;
+    final existing = state.files;
     final files = <int, Uint8List>{};
+    // Прогресс по каждому файлу (0..1) для агрегированного индикатора.
+    final progressById = <int, double>{};
 
-    for (var i = 0; i < audioList.length; i++) {
-      final audio = audioList[i];
-      final id = audio['id'] as int;
-      final fileUrl = audio['file'] as String;
-      final title = audio['title'] as String;
-
-      // Если уже в кэше — пропускаем
-      if (state.files.containsKey(id)) {
-        files[id] = state.files[id]!;
-        continue;
-      }
-
+    void publish() {
+      final overall =
+          progressById.values.fold<double>(0, (a, b) => a + b) / totalFiles;
       state = AudioCacheState(
         files: files,
-        downloadProgress: i / totalFiles,
-        statusText: 'Скачивание ${i + 1}/$totalFiles: $title',
+        downloadProgress: overall,
+        statusText: 'Скачивание ${files.length}/$totalFiles',
       );
+    }
 
+    Future<void> downloadOne(dynamic audio) async {
+      final id = audio['id'] as int;
+      final fileUrl = audio['file'] as String;
+
+      // Уже в кэше — переиспользуем.
+      if (existing.containsKey(id)) {
+        files[id] = existing[id]!;
+        progressById[id] = 1.0;
+        publish();
+        return;
+      }
+
+      progressById[id] = 0.0;
       final bytes = await _api.downloadAudioFile(
         fileUrl,
         onProgress: (fileProgress) {
-          final overall = (i + fileProgress) / totalFiles;
-          state = AudioCacheState(
-            files: files,
-            downloadProgress: overall,
-            statusText: 'Скачивание ${i + 1}/$totalFiles: $title',
-          );
+          progressById[id] = fileProgress;
+          publish();
         },
       );
-
       files[id] = Uint8List.fromList(bytes);
+      progressById[id] = 1.0;
+      publish();
     }
+
+    // Параллельная загрузка с ограничением одновременных запросов.
+    // Воркеры тянут задачи из общего индекса (инкремент атомарен в
+    // однопоточном event loop'е Dart — между чтением и await нет переключений).
+    const maxConcurrent = 4;
+    var next = 0;
+    Future<void> worker() async {
+      while (true) {
+        final i = next++;
+        if (i >= audioList.length) break;
+        await downloadOne(audioList[i]);
+      }
+    }
+
+    final workerCount =
+        totalFiles < maxConcurrent ? totalFiles : maxConcurrent;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
 
     state = AudioCacheState(
       files: Map.unmodifiable(files),

@@ -153,11 +153,18 @@ class ApiClient {
     String fileUrl, {
     void Function(double)? onProgress,
   }) async {
-    // /media/... лежит вне /api, поэтому строим абсолютный URL от origin
-    // (Uri.resolve отбрасывает path baseUrl при absolute path аргументе).
-    final absoluteUrl = fileUrl.startsWith('http')
-        ? fileUrl
-        : Uri.parse(_dio.options.baseUrl).resolve(fileUrl).toString();
+    // /media/... лежит вне /api, поэтому строим абсолютный URL и отдаём его
+    // dio как есть (иначе dio снова приклеит baseUrl `/api` → /api/media/...).
+    // Если baseUrl относительный (web, same-origin `/api`) — резолвим от origin
+    // страницы (Uri.base); если абсолютный (Android) — от него.
+    final String absoluteUrl;
+    if (fileUrl.startsWith('http')) {
+      absoluteUrl = fileUrl;
+    } else {
+      final base = Uri.parse(_dio.options.baseUrl);
+      final origin = base.hasScheme ? base : Uri.base;
+      absoluteUrl = origin.resolve(fileUrl).toString();
+    }
 
     final response = await _dio.get<List<int>>(
       absoluteUrl,

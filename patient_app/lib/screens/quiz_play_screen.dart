@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,13 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
   bool _submitting = false;
   bool _audioPlaying = false;
 
+  /// Кнопки ответа активны только после окончания звука или по таймауту.
+  bool _canAnswer = false;
+  Timer? _enableTimer;
+
+  /// Сколько максимум ждём активации кнопок, если звук длиннее.
+  static const _maxWaitBeforeAnswer = Duration(seconds: 5);
+
   QuizDetail? _quiz;
 
   @override
@@ -43,28 +51,59 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
 
   Future<void> _playCurrentAudio() async {
     if (_quiz == null) return;
-    final question = _quiz!.questions[_currentIndex];
-    if (question.audioFileId == null) return;
+    final index = _currentIndex;
+    final question = _quiz!.questions[index];
+
+    // Новый вопрос — снова блокируем ответ, пока звук не доиграет / не пройдёт таймаут.
+    _enableTimer?.cancel();
+    setState(() {
+      _canAnswer = false;
+      _audioPlaying = false;
+    });
 
     final cache = ref.read(audioCacheProvider.notifier);
-    final audioBytes = cache.getFile(question.audioFileId!);
+    final audioBytes =
+        question.audioFileId == null ? null : cache.getFile(question.audioFileId!);
 
-    if (audioBytes == null) return;
+    // Нет звука для проигрывания — отвечать можно сразу.
+    if (audioBytes == null) {
+      if (mounted) setState(() => _canAnswer = true);
+      return;
+    }
+
+    // Активируем кнопки по таймауту, если звук окажется длиннее 5 секунд.
+    _enableTimer = Timer(_maxWaitBeforeAnswer, () {
+      if (mounted && _currentIndex == index) setState(() => _canAnswer = true);
+    });
 
     try {
       setState(() => _audioPlaying = true);
-      await _player.setAudioSource(
-        _BytesAudioSource(audioBytes),
-      );
-      await _player.play();
-      if (mounted) setState(() => _audioPlaying = false);
+      await _player.setAudioSource(_BytesAudioSource(audioBytes));
+      unawaited(_player.play());
+      // play() завершается сразу при СТАРТЕ воспроизведения, поэтому ждём
+      // реального окончания звука через playerStateStream (completed).
+      await _player.playerStateStream
+          .firstWhere((s) => s.processingState == ProcessingState.completed);
+      _onAudioFinished(index);
     } catch (_) {
-      if (mounted) setState(() => _audioPlaying = false);
+      // Ошибку воспроизведения не превращаем в тупик — разрешаем ответить.
+      _onAudioFinished(index);
     }
   }
 
+  /// Звук текущего вопроса доиграл (или ошибка) — разблокируем ответ.
+  void _onAudioFinished(int index) {
+    if (!mounted || _currentIndex != index) return;
+    _enableTimer?.cancel();
+    setState(() {
+      _audioPlaying = false;
+      _canAnswer = true;
+    });
+  }
+
   void _answer(String answer) {
-    if (_quiz == null || _submitting) return;
+    if (_quiz == null || _submitting || !_canAnswer) return;
+    _enableTimer?.cancel();
     final question = _quiz!.questions[_currentIndex];
 
     _answers.add({
@@ -100,6 +139,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
 
   @override
   void dispose() {
+    _enableTimer?.cancel();
     _player.dispose();
     super.dispose();
   }
@@ -160,12 +200,15 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: SizedBox(
-                  height: 240,
+                  height: 160,
                   child: Row(
+                    // stretch — чтобы кнопки реально заполняли высоту SizedBox,
+                    // а не центрировались в нём с «родным» размером.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         child: FilledButton(
-                          onPressed: () => _answer('да'),
+                          onPressed: _canAnswer ? () => _answer('да') : null,
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.green.shade600,
                             shape: RoundedRectangleBorder(
@@ -180,7 +223,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: FilledButton(
-                          onPressed: () => _answer('нет'),
+                          onPressed: _canAnswer ? () => _answer('нет') : null,
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.red.shade600,
                             shape: RoundedRectangleBorder(
