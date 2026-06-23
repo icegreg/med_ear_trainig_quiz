@@ -105,6 +105,14 @@ class AuthRequiredTest(TestCase):
         resp = self.client.get('/api/doctors/quizzes')
         self.assertEqual(resp.status_code, 401)
 
+    def test_doctor_create_quiz_requires_auth(self):
+        resp = self.client.post(
+            '/api/doctors/quizzes',
+            data='{"title": "T", "sample_ids": [1]}',
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 401)
+
     def test_doctor_assign_quiz_requires_auth(self):
         resp = self.client.post(
             '/api/doctors/patients/1/assign-quiz',

@@ -176,6 +176,12 @@ class QuizSummarySchema(Schema):
     created_at: datetime
 
 
+class CreateQuizSchema(Schema):
+    title: str
+    description: str = ''
+    sample_ids: list[int]
+
+
 # --- Assignments ---
 
 class AssignQuizSchema(Schema):
