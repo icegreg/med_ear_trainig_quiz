@@ -79,24 +79,26 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
     try {
       setState(() => _audioPlaying = true);
       await _player.setAudioSource(_BytesAudioSource(audioBytes));
-      await _player.play(); // завершается, когда звук доиграл
-      if (mounted && _currentIndex == index) {
-        _enableTimer?.cancel();
-        setState(() {
-          _audioPlaying = false;
-          _canAnswer = true;
-        });
-      }
+      unawaited(_player.play());
+      // play() завершается сразу при СТАРТЕ воспроизведения, поэтому ждём
+      // реального окончания звука через playerStateStream (completed).
+      await _player.playerStateStream
+          .firstWhere((s) => s.processingState == ProcessingState.completed);
+      _onAudioFinished(index);
     } catch (_) {
       // Ошибку воспроизведения не превращаем в тупик — разрешаем ответить.
-      if (mounted && _currentIndex == index) {
-        _enableTimer?.cancel();
-        setState(() {
-          _audioPlaying = false;
-          _canAnswer = true;
-        });
-      }
+      _onAudioFinished(index);
     }
+  }
+
+  /// Звук текущего вопроса доиграл (или ошибка) — разблокируем ответ.
+  void _onAudioFinished(int index) {
+    if (!mounted || _currentIndex != index) return;
+    _enableTimer?.cancel();
+    setState(() {
+      _audioPlaying = false;
+      _canAnswer = true;
+    });
   }
 
   void _answer(String answer) {
@@ -198,7 +200,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: SizedBox(
-                  height: 240,
+                  height: 480,
                   child: Row(
                     children: [
                       Expanded(

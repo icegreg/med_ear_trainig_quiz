@@ -57,7 +57,6 @@ class AudioCacheNotifier extends StateNotifier<AudioCacheState> {
       final audio = audioList[i];
       final id = audio['id'] as int;
       final fileUrl = audio['file'] as String;
-      final title = audio['title'] as String;
 
       // Если уже в кэше — пропускаем
       if (state.files.containsKey(id)) {
@@ -68,7 +67,7 @@ class AudioCacheNotifier extends StateNotifier<AudioCacheState> {
       state = AudioCacheState(
         files: files,
         downloadProgress: i / totalFiles,
-        statusText: 'Скачивание ${i + 1}/$totalFiles: $title',
+        statusText: 'Скачивание ${i + 1}/$totalFiles',
       );
 
       final bytes = await _api.downloadAudioFile(
@@ -78,7 +77,7 @@ class AudioCacheNotifier extends StateNotifier<AudioCacheState> {
           state = AudioCacheState(
             files: files,
             downloadProgress: overall,
-            statusText: 'Скачивание ${i + 1}/$totalFiles: $title',
+            statusText: 'Скачивание ${i + 1}/$totalFiles',
           );
         },
       );
