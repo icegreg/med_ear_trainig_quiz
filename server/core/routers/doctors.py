@@ -13,6 +13,7 @@ from ..models import (
     Patient,
     PatientQuizAssignment,
     Quiz,
+    QuizQuestion,
     QuizResult,
 )
 from ..schemas import (
@@ -24,6 +25,7 @@ from ..schemas import (
     CreateCategorySchema,
     CreatePatientResponseSchema,
     CreatePatientSchema,
+    CreateQuizSchema,
     DoctorListSchema,
     DoctorSchema,
     ErrorSchema,
@@ -287,6 +289,58 @@ def get_quiz_audio(request, quiz_id: int):
         }
         for af in audio_files
     ]
+
+
+@router.post('/quizzes', response={200: QuizSummarySchema, 400: ErrorSchema})
+def create_quiz(request, payload: CreateQuizSchema):
+    """Создать тест из выбранных сэмплов (аудио из библиотеки).
+
+    Каждый сэмпл становится отдельным вопросом «слышу / не слышу»
+    (correct_answer = «да»). Порядок вопросов = порядок переданных id.
+    """
+    title = payload.title.strip()
+    if not title:
+        return 400, {'status': 'error', 'message': 'Укажите название теста.'}
+
+    # Убираем дубли, сохраняя порядок выбора.
+    seen = set()
+    ordered_ids = []
+    for sid in payload.sample_ids:
+        if sid not in seen:
+            seen.add(sid)
+            ordered_ids.append(sid)
+
+    if not ordered_ids:
+        return 400, {'status': 'error', 'message': 'Выберите хотя бы один звук.'}
+
+    samples = {a.id: a for a in AudioFile.objects.filter(id__in=ordered_ids)}
+    missing = [sid for sid in ordered_ids if sid not in samples]
+    if missing:
+        return 400, {'status': 'error', 'message': 'Некоторые звуки не найдены.'}
+
+    ordered = [samples[sid] for sid in ordered_ids]
+
+    quiz = Quiz.objects.create(title=title, description=payload.description)
+    quiz.audio_files.add(*ordered)
+    QuizQuestion.objects.bulk_create([
+        QuizQuestion(
+            quiz=quiz,
+            audio_file=sample,
+            text=sample.title,
+            options=['да', 'нет'],
+            correct_answer='да',
+            order=i,
+        )
+        for i, sample in enumerate(ordered)
+    ])
+
+    return 200, {
+        'id': quiz.id,
+        'title': quiz.title,
+        'description': quiz.description,
+        'question_count': quiz.questions.count(),
+        'created_at': quiz.created_at,
+    }
 
 
 @router.get('/quizzes', response=list[QuizSummarySchema])

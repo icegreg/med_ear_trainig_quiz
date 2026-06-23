@@ -19,6 +19,10 @@ class DeviceTokenAuth(HttpBearer):
         except DeviceToken.DoesNotExist:
             return None
 
+        # Истёкший токен (старше 3 месяцев) — требуется новая авторизация.
+        if device_token.is_expired:
+            return None
+
         device_token.last_used_at = dj_timezone.now()
         device_token.save(update_fields=['last_used_at'])
 

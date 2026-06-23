@@ -203,6 +203,20 @@ class ApiClient {
     return resp.data;
   }
 
+  /// Создать тест из выбранных сэмплов (порядок [sampleIds] сохраняется).
+  Future<Map<String, dynamic>> createQuiz(
+    String title,
+    List<int> sampleIds, {
+    String description = '',
+  }) async {
+    final resp = await _dio.post('/doctors/quizzes', data: {
+      'title': title,
+      'description': description,
+      'sample_ids': sampleIds,
+    });
+    return resp.data;
+  }
+
   // ─── Audio Library ────────────────────────────────────
 
   Future<List<dynamic>> listAudio({int? categoryId}) async {

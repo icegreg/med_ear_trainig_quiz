@@ -6,6 +6,7 @@ import 'providers/auth_provider.dart';
 import 'providers/notifications_provider.dart';
 import 'screens/add_patient_screen.dart';
 import 'screens/audio_library_screen.dart';
+import 'screens/create_quiz_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
@@ -45,6 +46,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/audio-library', builder: (_, __) => const AudioLibraryScreen()),
           GoRoute(path: '/quizzes', builder: (_, __) => const QuizListScreen()),
+          GoRoute(path: '/quizzes/create', builder: (_, __) => const CreateQuizScreen()),
           GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
         ],
       ),
@@ -68,7 +70,7 @@ class _ShellLayout extends ConsumerWidget {
       selectedIndex = 1;
     } else if (location == '/audio-library') {
       selectedIndex = 2;
-    } else if (location == '/quizzes') {
+    } else if (location.startsWith('/quizzes')) {
       selectedIndex = 3;
     } else if (location == '/notifications') {
       selectedIndex = 4;

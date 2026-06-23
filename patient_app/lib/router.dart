@@ -4,9 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import 'core/storage.dart';
 import 'providers/auth_provider.dart';
+import 'providers/lock_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/change_password_screen.dart';
+import 'screens/lock_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/pin_setup_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/quiz_done_screen.dart';
 import 'screens/quiz_list_screen.dart';
@@ -19,6 +23,7 @@ final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
+  final locked = ref.watch(lockProvider);
   final storage = ref.watch(storageProvider);
 
   return GoRouter(
@@ -27,18 +32,38 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final isAuth = authState.status == AuthStatus.authenticated;
       final isOnboarded = storage.onboardingCompleted;
+      final hasPin = storage.hasPin;
       final path = state.matchedLocation;
 
       if (!isOnboarded && path != '/onboarding') return '/onboarding';
+
       // /settings доступен и без авторизации — нужен для смены API URL,
       // когда дефолтный недоступен или указан неверно.
-      if (!isAuth &&
-          path != '/login' &&
-          path != '/onboarding' &&
-          path != '/settings') {
+      if (!isAuth) {
+        if (path == '/login' || path == '/onboarding' || path == '/settings') {
+          return null;
+        }
         return '/login';
       }
-      if (isAuth && (path == '/login' || path == '/onboarding')) return '/';
+
+      // Авторизован, но приложение заблокировано (cold start / таймаут в фоне).
+      if (locked) {
+        if (hasPin) {
+          // Быстрый вход по коду; пароль и настройки остаются доступны.
+          if (path == '/lock' || path == '/login' || path == '/settings') {
+            return null;
+          }
+          return '/lock';
+        }
+        // Кода нет — требуется вход по паролю.
+        if (path == '/login' || path == '/settings') return null;
+        return '/login';
+      }
+
+      // Авторизован и разблокирован — нет смысла оставаться на экранах входа.
+      if (path == '/login' || path == '/onboarding' || path == '/lock') {
+        return '/';
+      }
 
       return null;
     },
@@ -50,6 +75,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/lock',
+        builder: (context, state) => const LockScreen(),
+      ),
+      GoRoute(
+        path: '/pin-setup',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PinSetupScreen(),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -92,6 +126,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/change-password',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
     ],
   );

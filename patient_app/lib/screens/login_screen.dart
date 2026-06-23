@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/storage.dart';
 import '../providers/auth_provider.dart';
+import '../providers/lock_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -135,10 +136,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  void _login() {
+  Future<void> _login() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
     if (username.isEmpty || password.isEmpty) return;
-    ref.read(authProvider.notifier).login(username, password);
+
+    await ref.read(authProvider.notifier).login(username, password);
+    if (!mounted) return;
+
+    final authenticated =
+        ref.read(authProvider).status == AuthStatus.authenticated;
+    if (!authenticated) return;
+
+    // Вход выполнен — снимаем блокировку.
+    ref.read(lockProvider.notifier).unlock();
+
+    // Нет кода быстрого входа — предлагаем создать.
+    if (!ref.read(storageProvider).hasPin) {
+      context.go('/pin-setup');
+    } else {
+      context.go('/');
+    }
   }
 }

@@ -176,6 +176,43 @@ void main() {
       expect(resp.statusCode, 200);
       expect(resp.data, isList);
     });
+
+    test('POST /doctors/quizzes — create quiz from samples', () async {
+      final auth = Options(headers: {'Authorization': 'Bearer $_accessToken'});
+      final lib = await _dio.get('/doctors/audio-library', options: auth);
+      final samples = lib.data as List;
+      if (samples.isEmpty) {
+        markTestSkipped('No audio samples in library');
+        return;
+      }
+      final sampleId = samples.first['id'];
+
+      final resp = await _dio.post(
+        '/doctors/quizzes',
+        data: {
+          'title': 'E2E Quiz from samples',
+          'description': 'created by integration test',
+          'sample_ids': [sampleId, sampleId], // дубль должен схлопнуться
+        },
+        options: auth,
+      );
+      expect(resp.statusCode, 200);
+      expect(resp.data['title'], 'E2E Quiz from samples');
+      expect(resp.data['question_count'], 1);
+    });
+
+    test('POST /doctors/quizzes — empty sample_ids returns 400', () async {
+      try {
+        await _dio.post(
+          '/doctors/quizzes',
+          data: {'title': 'No samples', 'sample_ids': []},
+          options: Options(headers: {'Authorization': 'Bearer $_accessToken'}),
+        );
+        fail('Expected 400');
+      } on DioException catch (e) {
+        expect(e.response?.statusCode, 400);
+      }
+    });
   });
 
   group('Notifications', () {

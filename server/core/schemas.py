@@ -93,6 +93,11 @@ class SetStartingSoundSchema(Schema):
     audio_file_id: int | None = None
 
 
+class ChangePasswordSchema(Schema):
+    old_password: str
+    new_password: str
+
+
 # --- Audio Category ---
 
 class AudioCategorySchema(Schema):
@@ -169,6 +174,12 @@ class QuizSummarySchema(Schema):
     description: str
     question_count: int
     created_at: datetime
+
+
+class CreateQuizSchema(Schema):
+    title: str
+    description: str = ''
+    sample_ids: list[int]
 
 
 # --- Assignments ---

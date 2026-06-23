@@ -343,6 +343,94 @@ class DoctorQuizzesTest(APITestBase):
         self.assertIn(str(self.doctor2.id), ids)
 
 
+class CreateQuizTest(APITestBase):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.audio2 = AudioFile.objects.create(
+            title='Second Audio',
+            file=SimpleUploadedFile('test2.wav', b'fake-audio-data-2'),
+            duration_seconds=8,
+        )
+
+    def _payload(self, **overrides):
+        data = {
+            'title': 'Новый тест',
+            'description': 'Из сэмплов',
+            'sample_ids': [self.audio.id, self.audio2.id],
+        }
+        data.update(overrides)
+        return json.dumps(data)
+
+    def test_create_quiz_from_samples(self):
+        resp = self.client.post(
+            '/api/doctors/quizzes',
+            data=self._payload(),
+            content_type='application/json',
+            **self.doctor_headers(),
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['title'], 'Новый тест')
+        self.assertEqual(data['question_count'], 2)
+
+        quiz = Quiz.objects.get(id=data['id'])
+        questions = list(quiz.questions.order_by('order'))
+        self.assertEqual([q.audio_file_id for q in questions],
+                         [self.audio.id, self.audio2.id])
+        # Каждый сэмпл — вопрос «слышу / не слышу».
+        self.assertEqual(questions[0].options, ['да', 'нет'])
+        self.assertEqual(questions[0].correct_answer, 'да')
+        self.assertEqual(questions[0].text, self.audio.title)
+        self.assertEqual(list(quiz.audio_files.order_by('id')),
+                         [self.audio, self.audio2])
+
+    def test_create_quiz_preserves_order_and_dedupes(self):
+        resp = self.client.post(
+            '/api/doctors/quizzes',
+            data=self._payload(
+                sample_ids=[self.audio2.id, self.audio.id, self.audio2.id],
+            ),
+            content_type='application/json',
+            **self.doctor_headers(),
+        )
+        self.assertEqual(resp.status_code, 200)
+        quiz = Quiz.objects.get(id=resp.json()['id'])
+        self.assertEqual(
+            [q.audio_file_id for q in quiz.questions.order_by('order')],
+            [self.audio2.id, self.audio.id],
+        )
+
+    def test_create_quiz_empty_title_rejected(self):
+        resp = self.client.post(
+            '/api/doctors/quizzes',
+            data=self._payload(title='   '),
+            content_type='application/json',
+            **self.doctor_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_create_quiz_no_samples_rejected(self):
+        resp = self.client.post(
+            '/api/doctors/quizzes',
+            data=self._payload(sample_ids=[]),
+            content_type='application/json',
+            **self.doctor_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_create_quiz_unknown_sample_rejected(self):
+        resp = self.client.post(
+            '/api/doctors/quizzes',
+            data=self._payload(sample_ids=[self.audio.id, 999999]),
+            content_type='application/json',
+            **self.doctor_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(Quiz.objects.filter(title='Новый тест').exists())
+
+
 class AssignQuizTest(APITestBase):
 
     def test_assign_quiz(self):

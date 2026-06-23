@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/api_client.dart';
 import '../core/constants.dart';
@@ -27,6 +28,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _apiUrlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openPinSetup() async {
+    await context.push('/pin-setup');
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _removePin() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить код доступа?'),
+        content: const Text(
+          'Вход в приложение снова будет только по логину и паролю.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(storageProvider).clearPin();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -68,6 +99,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               setState(() {});
             },
           ),
+
+          if (storage.isLoggedIn) ...[
+            const Divider(height: 32),
+            Text('Безопасность', style: theme.textTheme.headlineMedium),
+            const SizedBox(height: 8),
+            if (storage.hasPin) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.pin_outlined),
+                title: const Text('Изменить код доступа'),
+                onTap: _openPinSetup,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.no_encryption_gmailerrorred_outlined,
+                    color: theme.colorScheme.error),
+                title: Text('Удалить код доступа',
+                    style: TextStyle(color: theme.colorScheme.error)),
+                onTap: _removePin,
+              ),
+            ] else
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Создать код быстрого входа'),
+                subtitle: const Text('Вход по 4-значному коду вместо пароля'),
+                onTap: _openPinSetup,
+              ),
+          ],
 
           const Divider(height: 32),
           Text('Подключение', style: theme.textTheme.headlineMedium),

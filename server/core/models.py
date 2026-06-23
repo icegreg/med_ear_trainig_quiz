@@ -1,9 +1,17 @@
 import secrets
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+# Срок жизни device token — 3 месяца.
+DEVICE_TOKEN_LIFETIME = timedelta(days=90)
+
+
+def default_token_expiry():
+    return timezone.now() + DEVICE_TOKEN_LIFETIME
 
 
 class SoftDeleteQuerySet(models.QuerySet):
@@ -383,6 +391,7 @@ class DeviceToken(models.Model):
     device_info = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=default_token_expiry)
     last_used_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -391,6 +400,14 @@ class DeviceToken(models.Model):
 
     def __str__(self):
         return f'Token {self.token[:8]}... — {self.patient}'
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_valid(self):
+        return self.is_active and not self.is_expired
 
 
 class Notification(models.Model):
