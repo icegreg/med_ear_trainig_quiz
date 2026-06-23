@@ -27,6 +27,21 @@ docker compose up -d --build
 # http://localhost/admin    — Django admin (admin/admin)
 ```
 
+#### Сборка Flutter web без локального SDK (профиль `build`)
+Если на хосте нет Flutter SDK, web-бандлы можно собрать в Docker
+(образ `instrumentisto/flutter:3.24`). Артефакты попадают в те же
+`./*/build/web`, которые монтирует nginx.
+```bash
+docker compose --profile build run --rm flutter-patient
+docker compose --profile build run --rm flutter-doctor
+docker compose up -d --build
+```
+Build-сервисы в конце делают `chown` на `HOST_UID:HOST_GID` (по умолчанию
+`1000:1000`), чтобы артефакты не оставались root-owned. Если ваш UID/GID
+отличается — задайте `HOST_UID`/`HOST_GID` (в `.env` или окружении).
+Прод (Coolify) собирает Flutter иначе — внутри `Dockerfile.coolify`,
+поэтому build-сервисы только для локальной разработки.
+
 ### Локальная разработка (сервер)
 ```bash
 cd server/
