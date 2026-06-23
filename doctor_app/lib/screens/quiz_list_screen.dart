@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../core/media_auth.dart';
 import '../core/web_audio_player.dart';
 import '../models/quiz.dart';
@@ -15,6 +16,11 @@ class QuizListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Тесты')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.go('/quizzes/create'),
+        icon: const Icon(Icons.add),
+        label: const Text('Новый тест'),
+      ),
       body: quizzesAsync.when(
         data: (quizzes) {
           if (quizzes.isEmpty) {
