@@ -9,6 +9,9 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Версия бэкенда (можно переопределить переменной окружения в проде).
+BACKEND_VERSION = os.environ.get('BACKEND_VERSION', '1.0.0')
+
 # Environment: test | preprod | prod
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'test')
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'providers/app_version_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/notifications_provider.dart';
 import 'screens/add_patient_screen.dart';
@@ -131,6 +132,29 @@ class _ShellLayout extends ConsumerWidget {
                 label: const Text('Уведомления'),
               ),
             ],
+            // Версия приложения — внизу слева, под навигацией.
+            trailing: Expanded(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      final version = ref.watch(appVersionProvider);
+                      return Text(
+                        version.maybeWhen(
+                          data: (v) => 'v$v',
+                          orElse: () => '',
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: child),
