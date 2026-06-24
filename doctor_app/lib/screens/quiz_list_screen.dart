@@ -81,7 +81,8 @@ class _QuizTileState extends ConsumerState<_QuizTile> {
   @override
   Widget build(BuildContext context) {
     final q = widget.quiz;
-    final audioAsync = ref.watch(quizAudioProvider(q.id));
+    // Аудио приходит вместе со списком тестов — отдельный запрос не нужен.
+    final audios = q.audioFiles;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -94,31 +95,29 @@ class _QuizTileState extends ConsumerState<_QuizTile> {
         trailing: Chip(label: Text('${q.questionCount} вопр.')),
         childrenPadding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         children: [
-          audioAsync.when(
-            data: (audios) {
-              if (audios.isEmpty) {
-                return const Text('В тесте нет звуков');
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: audios.map((af) => ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.music_note),
-                      title: Text(af.title),
-                      trailing: IconButton(
-                        icon: Icon(
-                          _playingId == af.id ? Icons.stop_circle : Icons.play_circle,
+          if (audios.isEmpty)
+            const Text('В тесте нет звуков')
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: audios
+                  .map((af) => ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.music_note),
+                        title: Text(af.title),
+                        trailing: IconButton(
+                          icon: Icon(
+                            _playingId == af.id
+                                ? Icons.stop_circle
+                                : Icons.play_circle,
+                          ),
+                          color: Theme.of(context).colorScheme.primary,
+                          onPressed: () => _togglePlay(af.id, af.fileUrl),
                         ),
-                        color: Theme.of(context).colorScheme.primary,
-                        onPressed: () => _togglePlay(af.id, af.fileUrl),
-                      ),
-                    )).toList(),
-              );
-            },
-            loading: () => const LinearProgressIndicator(),
-            error: (_, __) => const Text('Ошибка загрузки звуков'),
-          ),
+                      ))
+                  .toList(),
+            ),
         ],
       ),
     );

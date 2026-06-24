@@ -36,6 +36,7 @@ from ..schemas import (
     PatientSchema,
     QuizResultSchema,
     QuizSummarySchema,
+    QuizWithAudioSchema,
     RenameCategorySchema,
     SetStartingSoundSchema,
     SuggestedTitleSchema,
@@ -361,20 +362,45 @@ def create_quiz(request, payload: CreateQuizSchema):
     }
 
 
-@router.get('/quizzes', response=list[QuizSummarySchema])
+def _audio_payload(af):
+    return {
+        'id': af.id,
+        'title': af.title,
+        'file': af.file.url,
+        'category_id': af.category_id,
+        'duration_seconds': af.duration_seconds,
+        'uploaded_at': af.uploaded_at,
+    }
+
+
+@router.get('/quizzes', response=list[QuizWithAudioSchema])
 def list_quizzes(request):
-    """Все доступные квизы."""
-    quizzes = Quiz.objects.prefetch_related('questions').all()
-    return [
-        {
+    """Все доступные квизы вместе с входящими в них аудио.
+
+    Аудио — объединение M2M `audio_files` и `questions.audio_file` (как в
+    /quizzes/{id}/audio), удалённые исключаются. Prefetch убирает N+1.
+    """
+    quizzes = Quiz.objects.prefetch_related(
+        'questions', 'audio_files', 'questions__audio_file'
+    ).all()
+    result = []
+    for q in quizzes:
+        audio_by_id = {
+            af.id: af for af in q.audio_files.all() if af.deleted_at is None
+        }
+        for question in q.questions.all():
+            af = question.audio_file
+            if af is not None and af.deleted_at is None:
+                audio_by_id[af.id] = af
+        result.append({
             'id': q.id,
             'title': q.title,
             'description': q.description,
-            'question_count': q.questions.count(),
+            'question_count': len(q.questions.all()),
             'created_at': q.created_at,
-        }
-        for q in quizzes
-    ]
+            'audio_files': [_audio_payload(af) for af in audio_by_id.values()],
+        })
+    return result
 
 
 # ─── Audio Library ──────────────────────────────────────────────────────

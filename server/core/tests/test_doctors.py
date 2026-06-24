@@ -334,6 +334,11 @@ class DoctorQuizzesTest(APITestBase):
         self.assertGreaterEqual(len(data), 1)
         self.assertEqual(data[0]['title'], 'Тест слуха')
         self.assertEqual(data[0]['question_count'], 1)
+        # Аудио теста приходит сразу в списке (без отдельного /audio).
+        audio = data[0]['audio_files']
+        self.assertEqual([a['id'] for a in audio], [self.audio.id])
+        self.assertEqual(audio[0]['title'], self.audio.title)
+        self.assertIn('file', audio[0])
 
     def test_list_doctors(self):
         resp = self.client.get('/api/doctors/list', **self.doctor_headers())
