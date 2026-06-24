@@ -17,6 +17,19 @@ import '../providers/audio_library_provider.dart';
 import '../providers/patients_provider.dart';
 import '../providers/quiz_provider.dart';
 
+/// Ответы пациента хранятся как «да»/«нет», но врачу показываем «Слышу»/«Не слышу».
+String _answerLabel(dynamic raw) {
+  final v = raw?.toString().trim().toLowerCase();
+  switch (v) {
+    case 'да':
+      return 'Слышу';
+    case 'нет':
+      return 'Не слышу';
+    default:
+      return raw?.toString() ?? '';
+  }
+}
+
 final _assignmentsProvider = FutureProvider.family<List<Assignment>, int>((ref, patientId) async {
   final api = ref.watch(apiClientProvider);
   final data = await api.getPatientAssignments(patientId);
@@ -149,9 +162,10 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
                 const SizedBox(height: 8),
                 assignmentsAsync.when(
                   data: (assignments) {
-                    if (assignments.isEmpty) return const Text('Нет назначений');
+                    final active = assignments.where((a) => a.isActive).toList();
+                    if (active.isEmpty) return const Text('Нет активных назначений');
                     return Column(
-                      children: assignments.map((a) => _AssignmentTile(
+                      children: active.map((a) => _AssignmentTile(
                         assignment: a,
                         onUnassign: () => _confirmUnassign(context, a.id, a.quizTitle),
                       )).toList(),
@@ -167,19 +181,44 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
                 const SizedBox(height: 8),
                 resultsAsync.when(
                   data: (results) {
-                    if (results.isEmpty) return const Text('Нет результатов');
+                    final expired = (assignmentsAsync.valueOrNull ?? const <Assignment>[])
+                        .where((a) => a.isExpired)
+                        .toList();
+                    if (results.isEmpty && expired.isEmpty) {
+                      return const Text('Нет результатов');
+                    }
                     return Column(
-                      children: results.map((r) => Card(
-                        child: ExpansionTile(
-                          title: Text(r.quizTitle),
-                          subtitle: Text('Баллы: ${r.score ?? '-'} | ${r.submittedAt.toLocal().toString().substring(0, 16)}'),
-                          children: r.answers.map<Widget>((a) => ListTile(
-                            dense: true,
-                            title: Text('Вопрос ${a['question_id']}'),
-                            trailing: Text('${a['answer']}'),
-                          )).toList(),
-                        ),
-                      )).toList(),
+                      children: [
+                        ...results.map((r) => Card(
+                          child: ExpansionTile(
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(r.quizTitle)),
+                                const _StatusBadge(label: 'Пройден', color: Colors.green),
+                              ],
+                            ),
+                            subtitle: Text('Баллы: ${r.score ?? '-'} | ${r.submittedAt.toLocal().toString().substring(0, 16)}'),
+                            children: r.answers.map<Widget>((a) => ListTile(
+                              dense: true,
+                              title: Text('Вопрос ${a['question_id']}'),
+                              trailing: Text(_answerLabel(a['answer'])),
+                            )).toList(),
+                          ),
+                        )),
+                        ...expired.map((a) => Card(
+                          child: ListTile(
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(a.quizTitle)),
+                                const _StatusBadge(label: 'Просрочено', color: Colors.orange),
+                              ],
+                            ),
+                            subtitle: a.endsAt != null
+                                ? Text('Срок истёк: ${a.endsAt!.toLocal().toString().substring(0, 16)}')
+                                : null,
+                          ),
+                        )),
+                      ],
                     );
                   },
                   loading: () => const LinearProgressIndicator(),
@@ -799,6 +838,32 @@ class _FioDialogState extends ConsumerState<_FioDialog> {
               : const Text('Сохранить'),
         ),
       ],
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final MaterialColor color;
+
+  const _StatusBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color[900],
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

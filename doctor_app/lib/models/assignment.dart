@@ -7,6 +7,7 @@ class Assignment {
   final DateTime? startsAt;
   final DateTime? endsAt;
   final DateTime? completedAt;
+  final bool isExpired;
 
   Assignment({
     required this.id,
@@ -17,6 +18,7 @@ class Assignment {
     this.startsAt,
     this.endsAt,
     this.completedAt,
+    this.isExpired = false,
   });
 
   factory Assignment.fromJson(Map<String, dynamic> json) => Assignment(
@@ -28,7 +30,11 @@ class Assignment {
         startsAt: json['starts_at'] != null ? DateTime.parse(json['starts_at']) : null,
         endsAt: json['ends_at'] != null ? DateTime.parse(json['ends_at']) : null,
         completedAt: json['completed_at'] != null ? DateTime.parse(json['completed_at']) : null,
+        isExpired: json['is_expired'] ?? false,
       );
 
   bool get isCompleted => status == 'completed';
+
+  /// Назначение активно: ещё не пройдено и срок не истёк.
+  bool get isActive => !isCompleted && !isExpired;
 }
