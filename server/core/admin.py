@@ -1,6 +1,7 @@
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.contrib.auth.models import User
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, render
@@ -175,6 +176,15 @@ class CompletedQuizInline(admin.TabularInline):
         return False
 
 
+class ReassignPatientsForm(forms.Form):
+    """Промежуточная форма выбора нового врача для массового переназначения."""
+    doctor = forms.ModelChoiceField(
+        queryset=Doctor.objects.all(),
+        label='Новый врач',
+        empty_label='— выберите врача —',
+    )
+
+
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
     list_display = ['full_name_display', 'user', 'doctor', 'birth_date', 'assigned_count', 'completed_count', 'logging_enabled', 'logs_link', 'created_at']
@@ -183,6 +193,68 @@ class PatientAdmin(admin.ModelAdmin):
     raw_id_fields = ['user', 'doctor', 'starting_sound']
     readonly_fields = ['logs_section']
     inlines = [AssignedQuizInline, CompletedQuizInline]
+    actions = ['reassign_to_doctor']
+
+    @admin.action(description='Переназначить выбранных пациентов другому врачу')
+    def reassign_to_doctor(self, request, queryset):
+        """Массово переназначить пациентов выбранному врачу.
+
+        Показывает промежуточную страницу с выбором врача; по подтверждению
+        переназначает и шлёт уведомление прежнему врачу каждого пациента
+        (как в API /doctors/transfer-patient).
+        """
+        if 'apply' in request.POST:
+            form = ReassignPatientsForm(request.POST)
+            if form.is_valid():
+                target = form.cleaned_data['doctor']
+                reassigned = 0
+                skipped = 0
+                for patient in queryset.select_related('doctor', 'user'):
+                    source = patient.doctor
+                    if source and source.pk == target.pk:
+                        skipped += 1
+                        continue
+                    patient.doctor = target
+                    patient.save(update_fields=['doctor'])
+                    reassigned += 1
+                    if source is not None:
+                        Notification.objects.create(
+                            doctor=source,
+                            type=Notification.Type.PATIENT_TRANSFERRED,
+                            message=(
+                                f'Пациент {patient.user.username} передан '
+                                f'врачу {target}.'
+                            ),
+                            data={
+                                'patient_id': patient.id,
+                                'patient_username': patient.user.username,
+                                'to_doctor_id': str(target.id),
+                                'via': 'admin',
+                            },
+                        )
+                msg = f'Переназначено пациентов: {reassigned} → {target}.'
+                if skipped:
+                    msg += f' Пропущено (уже у этого врача): {skipped}.'
+                self.message_user(request, msg, messages.SUCCESS)
+                return None  # вернуться к списку
+
+            self.message_user(
+                request, 'Выберите врача для переназначения.', messages.ERROR
+            )
+
+        form = ReassignPatientsForm()
+        return render(
+            request,
+            'admin/core/patient/reassign.html',
+            {
+                **self.admin_site.each_context(request),
+                'title': 'Переназначить пациентов',
+                'opts': self.model._meta,
+                'patients': queryset,
+                'form': form,
+                'action_checkbox_name': ACTION_CHECKBOX_NAME,
+            },
+        )
 
     def get_fields(self, request, obj=None):
         base = ['user', 'doctor', 'last_name', 'first_name', 'patronymic',

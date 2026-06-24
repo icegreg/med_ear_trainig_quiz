@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Главная</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:core_patient_changelist' %}">Пациенты</a>
+  &rsaquo; Переназначить
+</div>
+{% endblock %}
+
+{% block content %}
+<p>Будут переназначены следующие пациенты (<b>{{ patients|length }}</b>):</p>
+<ul>
+  {% for patient in patients %}
+    <li>{{ patient }} — текущий врач: {{ patient.doctor|default:"—" }}</li>
+  {% endfor %}
+</ul>
+
+<form action="" method="post">
+  {% csrf_token %}
+  {% for patient in patients %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ patient.pk }}">
+  {% endfor %}
+  <input type="hidden" name="action" value="reassign_to_doctor">
+
+  <fieldset class="module aligned">
+    {% for field in form %}
+      <div class="form-row">
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+    {% endfor %}
+  </fieldset>
+
+  <div class="submit-row">
+    <input type="submit" name="apply" value="Переназначить" class="default">
+    <a href="{% url 'admin:core_patient_changelist' %}" class="button cancel-link">Отмена</a>
+  </div>
+</form>
+{% endblock %}
