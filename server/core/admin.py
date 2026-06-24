@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth.models import User
 from django.http import FileResponse, Http404
@@ -8,6 +9,11 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from . import client_logs
+
+# Версия бэкенда видна в шапке и на главной странице админки.
+admin.site.site_header = f'Тест слуха · бэкенд v{settings.BACKEND_VERSION}'
+admin.site.site_title = 'Тест слуха — администрирование'
+admin.site.index_title = f'Администрирование (бэкенд v{settings.BACKEND_VERSION})'
 
 
 def _status_class(code):
