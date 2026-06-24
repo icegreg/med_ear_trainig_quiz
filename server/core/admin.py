@@ -206,8 +206,8 @@ class PatientAdmin(admin.ModelAdmin):
         return format_html(
             '<a class="button" href="{}">Открыть журнал →</a>'
             '<span style="margin-left:12px;color:#555;">'
-            'записей: <b>{}</b>, размер: <b>{:.1f} KB</b></span>',
-            url, count, size_kb,
+            'записей: <b>{}</b>, размер: <b>{} KB</b></span>',
+            url, count, f'{size_kb:.1f}',
         )
 
     @admin.display(description='ФИО', ordering='last_name')
@@ -242,7 +242,7 @@ class PatientAdmin(admin.ModelAdmin):
         if size == 0:
             return format_html('<a href="{}">пусто</a>', url)
         kb = size / 1024
-        return format_html('<a href="{}">{:.1f} KB</a>', url, kb)
+        return format_html('<a href="{}">{} KB</a>', url, f'{kb:.1f}')
 
     def get_urls(self):
         urls = super().get_urls()
