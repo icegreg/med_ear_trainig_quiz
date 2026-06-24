@@ -4,13 +4,36 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../models/quiz.dart';
+import '../providers/lock_provider.dart';
 import '../providers/quiz_provider.dart';
 
-class QuizListScreen extends ConsumerWidget {
+class QuizListScreen extends ConsumerStatefulWidget {
   const QuizListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<QuizListScreen> createState() => _QuizListScreenState();
+}
+
+class _QuizListScreenState extends ConsumerState<QuizListScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Обновляем список доступных тестов при каждом входе в раздел
+    // (провайдер не autoDispose — иначе показал бы закэшированные данные).
+    Future.microtask(() {
+      if (mounted) ref.invalidate(quizListProvider);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Разблокировались по PIN, находясь в этом разделе → обновляем данные.
+    ref.listen<bool>(lockProvider, (prev, next) {
+      if (prev == true && next == false) {
+        ref.invalidate(quizListProvider);
+      }
+    });
+
     final quizzes = ref.watch(quizListProvider);
     final theme = Theme.of(context);
 
