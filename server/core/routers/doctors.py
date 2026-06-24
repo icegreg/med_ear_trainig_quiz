@@ -218,6 +218,7 @@ def get_patient_assignments(request, patient_id: int):
             'starts_at': a.starts_at,
             'ends_at': a.ends_at,
             'completed_at': a.completed_at,
+            'is_expired': a.is_expired,
         }
         for a in assignments
     ]
@@ -266,6 +267,7 @@ def assign_quiz(request, patient_id: int, payload: AssignQuizSchema):
         'starts_at': assignment.starts_at,
         'ends_at': assignment.ends_at,
         'completed_at': assignment.completed_at,
+        'is_expired': assignment.is_expired,
     }
 
 

@@ -209,6 +209,7 @@ class AssignmentSchema(Schema):
     starts_at: datetime | None
     ends_at: datetime | None
     completed_at: datetime | None
+    is_expired: bool = False
 
 
 # --- Results ---
