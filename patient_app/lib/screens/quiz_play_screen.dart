@@ -8,6 +8,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../core/api_client.dart';
 import '../core/audio_cache.dart';
+import '../core/temp_audio.dart';
 import '../models/quiz.dart';
 import '../providers/quiz_provider.dart';
 
@@ -78,7 +79,14 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
 
     try {
       setState(() => _audioPlaying = true);
-      await _player.setAudioSource(_BytesAudioSource(audioBytes));
+      // На Android/iOS играем из файла — in-memory StreamAudioSource на
+      // Android часто проигрывается без звука. На web путь = null → из памяти.
+      final path = await writeTempAudio('${question.audioFileId}', audioBytes);
+      if (path != null) {
+        await _player.setFilePath(path);
+      } else {
+        await _player.setAudioSource(_BytesAudioSource(audioBytes));
+      }
       unawaited(_player.play());
       // play() завершается сразу при СТАРТЕ воспроизведения, поэтому ждём
       // реального окончания звука через playerStateStream (completed).
