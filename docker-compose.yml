@@ -44,8 +44,39 @@ services:
     depends_on:
       - web
 
+  # ─── Flutter web build (one-shot, профиль "build") ──────────────────────
+  # Собирают web-бандлы в ./*/build/web, которые раздаёт nginx (тот же mount).
+  # Запуск по требованию:
+  #   docker compose --profile build run --rm flutter-patient
+  #   docker compose --profile build run --rm flutter-doctor
+  # chown в конце возвращает артефакты владельцу-хосту (иначе build/ станет root).
+  flutter-patient:
+    profiles: ["build"]
+    image: instrumentisto/flutter:3.24
+    working_dir: /app
+    volumes:
+      - ./patient_app:/app
+      - flutter_pub_cache:/root/.pub-cache
+    command: >
+      sh -c "flutter pub get &&
+             flutter build web --dart-define=FLAVOR=dev &&
+             chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
+
+  flutter-doctor:
+    profiles: ["build"]
+    image: instrumentisto/flutter:3.24
+    working_dir: /app
+    volumes:
+      - ./doctor_app:/app
+      - flutter_pub_cache:/root/.pub-cache
+    command: >
+      sh -c "flutter pub get &&
+             flutter build web --base-href=/doctors/ --dart-define=FLAVOR=dev &&
+             chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
+
 volumes:
   postgres_data:
   media_data:
   static_data:
   client_logs_data:
+  flutter_pub_cache:
