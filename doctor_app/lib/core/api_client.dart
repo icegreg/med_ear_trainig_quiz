@@ -203,6 +203,12 @@ class ApiClient {
     return resp.data;
   }
 
+  /// Подсказка названия для нового теста (нумерация — по тестам врача).
+  Future<String> getSuggestedQuizTitle() async {
+    final resp = await _dio.get('/doctors/quizzes/suggested-title');
+    return resp.data['title'] as String;
+  }
+
   /// Создать тест из выбранных сэмплов (порядок [sampleIds] сохраняется).
   Future<Map<String, dynamic>> createQuiz(
     String title,

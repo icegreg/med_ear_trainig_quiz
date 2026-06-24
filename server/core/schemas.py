@@ -176,10 +176,20 @@ class QuizSummarySchema(Schema):
     created_at: datetime
 
 
+class QuizWithAudioSchema(QuizSummarySchema):
+    """Сводка теста + входящие в него аудио (чтобы не дёргать /audio отдельно)."""
+    audio_files: list[AudioFileSchema]
+
+
 class CreateQuizSchema(Schema):
-    title: str
+    # Пустой title → сервер сгенерирует «Тест № N. ДД.ММ.ГГГГ» для врача.
+    title: str = ''
     description: str = ''
     sample_ids: list[int]
+
+
+class SuggestedTitleSchema(Schema):
+    title: str
 
 
 # --- Assignments ---

@@ -247,6 +247,14 @@ class Quiz(models.Model):
     audio_files = models.ManyToManyField(
         AudioFile, blank=True, related_name='quizzes'
     )
+    created_by = models.ForeignKey(
+        'Doctor',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_quizzes',
+        verbose_name='Создан врачом',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

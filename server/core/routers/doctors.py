@@ -3,6 +3,7 @@ from uuid import UUID
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from ninja import Query, Router
 
 from ..models import (
@@ -35,8 +36,10 @@ from ..schemas import (
     PatientSchema,
     QuizResultSchema,
     QuizSummarySchema,
+    QuizWithAudioSchema,
     RenameCategorySchema,
     SetStartingSoundSchema,
+    SuggestedTitleSchema,
     TransferPatientSchema,
     TransferResultSchema,
     UpdatePatientSchema,
@@ -291,16 +294,28 @@ def get_quiz_audio(request, quiz_id: int):
     ]
 
 
+def _suggested_quiz_title(doctor):
+    """«Тест № N. ДД.ММ.ГГГГ», где N — порядковый номер теста этого врача."""
+    number = Quiz.objects.filter(created_by=doctor).count() + 1
+    date = timezone.localdate().strftime('%d.%m.%Y')
+    return f'Тест № {number}. {date}'
+
+
+@router.get('/quizzes/suggested-title', response=SuggestedTitleSchema)
+def get_suggested_quiz_title(request):
+    """Подсказка названия для нового теста (нумерация — по тестам врача)."""
+    return {'title': _suggested_quiz_title(request.doctor)}
+
+
 @router.post('/quizzes', response={200: QuizSummarySchema, 400: ErrorSchema})
 def create_quiz(request, payload: CreateQuizSchema):
     """Создать тест из выбранных сэмплов (аудио из библиотеки).
 
     Каждый сэмпл становится отдельным вопросом «слышу / не слышу»
     (correct_answer = «да»). Порядок вопросов = порядок переданных id.
+    Пустое название → генерируется «Тест № N. ДД.ММ.ГГГГ» для врача.
     """
-    title = payload.title.strip()
-    if not title:
-        return 400, {'status': 'error', 'message': 'Укажите название теста.'}
+    title = payload.title.strip() or _suggested_quiz_title(request.doctor)
 
     # Убираем дубли, сохраняя порядок выбора.
     seen = set()
@@ -320,7 +335,11 @@ def create_quiz(request, payload: CreateQuizSchema):
 
     ordered = [samples[sid] for sid in ordered_ids]
 
-    quiz = Quiz.objects.create(title=title, description=payload.description)
+    quiz = Quiz.objects.create(
+        title=title,
+        description=payload.description,
+        created_by=request.doctor,
+    )
     quiz.audio_files.add(*ordered)
     QuizQuestion.objects.bulk_create([
         QuizQuestion(
@@ -343,20 +362,45 @@ def create_quiz(request, payload: CreateQuizSchema):
     }
 
 
-@router.get('/quizzes', response=list[QuizSummarySchema])
+def _audio_payload(af):
+    return {
+        'id': af.id,
+        'title': af.title,
+        'file': af.file.url,
+        'category_id': af.category_id,
+        'duration_seconds': af.duration_seconds,
+        'uploaded_at': af.uploaded_at,
+    }
+
+
+@router.get('/quizzes', response=list[QuizWithAudioSchema])
 def list_quizzes(request):
-    """Все доступные квизы."""
-    quizzes = Quiz.objects.prefetch_related('questions').all()
-    return [
-        {
+    """Все доступные квизы вместе с входящими в них аудио.
+
+    Аудио — объединение M2M `audio_files` и `questions.audio_file` (как в
+    /quizzes/{id}/audio), удалённые исключаются. Prefetch убирает N+1.
+    """
+    quizzes = Quiz.objects.prefetch_related(
+        'questions', 'audio_files', 'questions__audio_file'
+    ).all()
+    result = []
+    for q in quizzes:
+        audio_by_id = {
+            af.id: af for af in q.audio_files.all() if af.deleted_at is None
+        }
+        for question in q.questions.all():
+            af = question.audio_file
+            if af is not None and af.deleted_at is None:
+                audio_by_id[af.id] = af
+        result.append({
             'id': q.id,
             'title': q.title,
             'description': q.description,
-            'question_count': q.questions.count(),
+            'question_count': len(q.questions.all()),
             'created_at': q.created_at,
-        }
-        for q in quizzes
-    ]
+            'audio_files': [_audio_payload(af) for af in audio_by_id.values()],
+        })
+    return result
 
 
 # ─── Audio Library ──────────────────────────────────────────────────────
