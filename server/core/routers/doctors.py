@@ -3,6 +3,7 @@ from uuid import UUID
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from ninja import Query, Router
 
 from ..models import (
@@ -37,6 +38,7 @@ from ..schemas import (
     QuizSummarySchema,
     RenameCategorySchema,
     SetStartingSoundSchema,
+    SuggestedTitleSchema,
     TransferPatientSchema,
     TransferResultSchema,
     UpdatePatientSchema,
@@ -291,16 +293,28 @@ def get_quiz_audio(request, quiz_id: int):
     ]
 
 
+def _suggested_quiz_title(doctor):
+    """«Тест № N. ДД.ММ.ГГГГ», где N — порядковый номер теста этого врача."""
+    number = Quiz.objects.filter(created_by=doctor).count() + 1
+    date = timezone.localdate().strftime('%d.%m.%Y')
+    return f'Тест № {number}. {date}'
+
+
+@router.get('/quizzes/suggested-title', response=SuggestedTitleSchema)
+def get_suggested_quiz_title(request):
+    """Подсказка названия для нового теста (нумерация — по тестам врача)."""
+    return {'title': _suggested_quiz_title(request.doctor)}
+
+
 @router.post('/quizzes', response={200: QuizSummarySchema, 400: ErrorSchema})
 def create_quiz(request, payload: CreateQuizSchema):
     """Создать тест из выбранных сэмплов (аудио из библиотеки).
 
     Каждый сэмпл становится отдельным вопросом «слышу / не слышу»
     (correct_answer = «да»). Порядок вопросов = порядок переданных id.
+    Пустое название → генерируется «Тест № N. ДД.ММ.ГГГГ» для врача.
     """
-    title = payload.title.strip()
-    if not title:
-        return 400, {'status': 'error', 'message': 'Укажите название теста.'}
+    title = payload.title.strip() or _suggested_quiz_title(request.doctor)
 
     # Убираем дубли, сохраняя порядок выбора.
     seen = set()
@@ -320,7 +334,11 @@ def create_quiz(request, payload: CreateQuizSchema):
 
     ordered = [samples[sid] for sid in ordered_ids]
 
-    quiz = Quiz.objects.create(title=title, description=payload.description)
+    quiz = Quiz.objects.create(
+        title=title,
+        description=payload.description,
+        created_by=request.doctor,
+    )
     quiz.audio_files.add(*ordered)
     QuizQuestion.objects.bulk_create([
         QuizQuestion(

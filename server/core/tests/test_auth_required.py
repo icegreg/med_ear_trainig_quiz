@@ -113,6 +113,10 @@ class AuthRequiredTest(TestCase):
         )
         self.assertEqual(resp.status_code, 401)
 
+    def test_doctor_suggested_quiz_title_requires_auth(self):
+        resp = self.client.get('/api/doctors/quizzes/suggested-title')
+        self.assertEqual(resp.status_code, 401)
+
     def test_doctor_assign_quiz_requires_auth(self):
         resp = self.client.post(
             '/api/doctors/patients/1/assign-quiz',

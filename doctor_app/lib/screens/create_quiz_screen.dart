@@ -28,6 +28,30 @@ class _CreateQuizScreenState extends ConsumerState<CreateQuizScreen> {
   String _search = '';
   int? _playingId;
   bool _submitting = false;
+  bool _titlePrefilled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillDefaultTitle();
+  }
+
+  /// Предзаполняет название подсказкой с сервера («Тест № N. ДД.ММ.ГГГГ»,
+  /// где N — порядковый номер теста этого врача). Значение редактируемо —
+  /// не перезаписываем, если доктор уже что-то ввёл.
+  Future<void> _prefillDefaultTitle() async {
+    try {
+      final title = await ref.read(apiClientProvider).getSuggestedQuizTitle();
+      if (!mounted || _titlePrefilled || _titleCtrl.text.trim().isNotEmpty) {
+        return;
+      }
+      _titlePrefilled = true;
+      _titleCtrl.text = title;
+      setState(() {});
+    } catch (_) {
+      // Подсказка не загрузилась — оставляем поле пустым, доктор введёт сам.
+    }
+  }
 
   @override
   void dispose() {
@@ -120,6 +144,7 @@ class _CreateQuizScreenState extends ConsumerState<CreateQuizScreen> {
                   onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Название теста *',
+                    helperText: 'Сформировано автоматически — можно изменить',
                     border: OutlineInputBorder(),
                   ),
                 ),

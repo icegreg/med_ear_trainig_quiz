@@ -177,9 +177,14 @@ class QuizSummarySchema(Schema):
 
 
 class CreateQuizSchema(Schema):
-    title: str
+    # Пустой title → сервер сгенерирует «Тест № N. ДД.ММ.ГГГГ» для врача.
+    title: str = ''
     description: str = ''
     sample_ids: list[int]
+
+
+class SuggestedTitleSchema(Schema):
+    title: str
 
 
 # --- Assignments ---

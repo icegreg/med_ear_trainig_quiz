@@ -1,6 +1,7 @@
 """Тесты API врачей."""
 import json
 
+from core.auth import create_doctor_tokens
 from core.models import AudioFile, Patient, PatientQuizAssignment, Quiz, QuizQuestion
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -385,6 +386,8 @@ class CreateQuizTest(APITestBase):
         self.assertEqual(questions[0].text, self.audio.title)
         self.assertEqual(list(quiz.audio_files.order_by('id')),
                          [self.audio, self.audio2])
+        # Тест привязан к создавшему его врачу.
+        self.assertEqual(quiz.created_by_id, self.doctor.id)
 
     def test_create_quiz_preserves_order_and_dedupes(self):
         resp = self.client.post(
@@ -402,14 +405,16 @@ class CreateQuizTest(APITestBase):
             [self.audio2.id, self.audio.id],
         )
 
-    def test_create_quiz_empty_title_rejected(self):
+    def test_create_quiz_blank_title_generates_default(self):
+        # Пустое название → сервер формирует «Тест № N. ДД.ММ.ГГГГ».
         resp = self.client.post(
             '/api/doctors/quizzes',
             data=self._payload(title='   '),
             content_type='application/json',
             **self.doctor_headers(),
         )
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 200)
+        self.assertRegex(resp.json()['title'], r'^Тест № \d+\. \d{2}\.\d{2}\.\d{4}$')
 
     def test_create_quiz_no_samples_rejected(self):
         resp = self.client.post(
@@ -429,6 +434,42 @@ class CreateQuizTest(APITestBase):
         )
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(Quiz.objects.filter(title='Новый тест').exists())
+
+
+class SuggestedQuizTitleTest(APITestBase):
+
+    def _create(self, headers):
+        return self.client.post(
+            '/api/doctors/quizzes',
+            data=json.dumps({'title': '', 'sample_ids': [self.audio.id]}),
+            content_type='application/json',
+            **headers,
+        )
+
+    def test_numbering_counts_only_this_doctor(self):
+        # У врача пока нет созданных тестов (фикстурный quiz без created_by).
+        resp = self.client.get(
+            '/api/doctors/quizzes/suggested-title', **self.doctor_headers())
+        self.assertEqual(resp.status_code, 200)
+        self.assertRegex(resp.json()['title'],
+                         r'^Тест № 1\. \d{2}\.\d{2}\.\d{4}$')
+
+        # Создаём два теста → следующий номер 3.
+        self._create(self.doctor_headers())
+        self._create(self.doctor_headers())
+        resp = self.client.get(
+            '/api/doctors/quizzes/suggested-title', **self.doctor_headers())
+        self.assertTrue(resp.json()['title'].startswith('Тест № 3.'))
+
+    def test_numbering_independent_per_doctor(self):
+        # Врач 1 создал один тест.
+        self._create(self.doctor_headers())
+        # Врач 2 ещё ничего не создавал → его первый номер = 1.
+        tokens = create_doctor_tokens(self.doctor2)
+        headers2 = {'HTTP_AUTHORIZATION': f'Bearer {tokens["access"]}'}
+        resp = self.client.get(
+            '/api/doctors/quizzes/suggested-title', **headers2)
+        self.assertTrue(resp.json()['title'].startswith('Тест № 1.'))
 
 
 class AssignQuizTest(APITestBase):
