@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import '../core/api_client.dart';
 import '../core/constants.dart';
 import '../core/storage.dart';
 import '../providers/settings_provider.dart';
+
+/// Встроенный тестовый сигнал для проверки звука — чистый тон 1 кГц.
+const _kTestToneAsset = 'assets/audio/test_tone.wav';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -17,17 +24,54 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _apiUrlController;
 
+  final _soundPlayer = AudioPlayer();
+  StreamSubscription<PlayerState>? _soundSub;
+  bool _soundPlaying = false;
+
   @override
   void initState() {
     super.initState();
     final storage = ref.read(storageProvider);
     _apiUrlController = TextEditingController(text: storage.apiBaseUrl);
+
+    // Состояние кнопки «Проверить звук» ведём от плеера, а не вручную:
+    // воспроизведение завершилось / остановлено → кнопка снова «Проверить».
+    _soundSub = _soundPlayer.playerStateStream.listen((s) {
+      final playing = s.playing && s.processingState != ProcessingState.completed;
+      if (mounted && playing != _soundPlaying) {
+        setState(() => _soundPlaying = playing);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _soundSub?.cancel();
+    _soundPlayer.dispose();
     _apiUrlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleSoundCheck() async {
+    if (_soundPlaying) {
+      await _soundPlayer.stop();
+      return;
+    }
+    try {
+      // Поднимаем громкость до максимума, как при подготовке к тесту.
+      try {
+        await VolumeController.instance.setVolume(1.0);
+      } catch (_) {}
+      await _soundPlayer.setAsset(_kTestToneAsset);
+      await _soundPlayer.seek(Duration.zero);
+      await _soundPlayer.play();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось воспроизвести звук')),
+        );
+      }
+    }
   }
 
   Future<void> _openPinSetup() async {
@@ -98,6 +142,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               await storage.setBatteryThreshold(v);
               setState(() {});
             },
+          ),
+
+          const SizedBox(height: 16),
+          Text('Проверка звука',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(
+            'Воспроизведите тестовый сигнал, чтобы убедиться, что звук '
+            'работает и громкость достаточная.',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              onPressed: _toggleSoundCheck,
+              icon: Icon(_soundPlaying ? Icons.stop : Icons.volume_up),
+              label: Text(_soundPlaying ? 'Остановить' : 'Проверить звук'),
+            ),
           ),
 
           if (storage.isLoggedIn) ...[
