@@ -1,0 +1,110 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Главная</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:core_doctor_changelist' %}">Врачи</a>
+  &rsaquo; <a href="{{ doctor_change_url }}">{{ doctor }}</a>
+  &rsaquo; Журнал действий
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .log-meta { margin-bottom: 16px; color: #555; font-size: 13px; }
+  .log-meta b { color: #000; }
+  .log-controls { margin-bottom: 16px; }
+  .log-controls a { margin-right: 8px; }
+  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .log-table summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 10px;
+    display: grid;
+    grid-template-columns: 50px 190px 170px 1fr 200px 120px;
+    gap: 8px;
+    align-items: center;
+    border-top: 1px solid #eee;
+    font-family: monospace;
+  }
+  .log-table summary::-webkit-details-marker { display: none; }
+  .log-table details:hover summary { background: #f6f8fa; }
+  .log-table details[open] summary { background: #eaf3fb; border-left: 3px solid #79aec8; }
+  .log-index { color: #888; }
+  .log-action { font-weight: bold; color: #2a4a6a; }
+  .log-patient { color: #333; }
+  .log-detail { color: #555; word-break: break-word; }
+  .log-ip { color: #888; text-align: right; }
+  .log-full {
+    background: #f6f6f6;
+    border-left: 3px solid #79aec8;
+    margin: 0;
+    padding: 12px 16px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .log-header {
+    display: grid;
+    grid-template-columns: 50px 190px 170px 1fr 200px 120px;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #f0f0f0;
+    border-bottom: 2px solid #ccc;
+    font-weight: bold;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #555;
+  }
+  .log-empty { color: #888; padding: 24px; text-align: center; background: #fafafa; border-radius: 4px; }
+</style>
+
+<h1>Журнал действий — {{ doctor }}</h1>
+
+<div class="log-meta">
+  Всего записей: <b>{{ line_count }}</b> &nbsp;|&nbsp;
+  Размер: <b>{{ file_size_kb|floatformat:1 }} KB</b> &nbsp;|&nbsp;
+  Показано: <b>{{ shown_count }}</b> (новые сверху)
+</div>
+
+<div class="log-controls">
+  <a class="button" href="{{ doctor_change_url }}">← К врачу</a>
+  <a class="button" href="?lines=100">Последние 100</a>
+  <a class="button" href="?lines=500">500</a>
+  <a class="button" href="?lines=2000">2000</a>
+  <a class="button" href="{{ download_url }}">Скачать .jsonl целиком</a>
+</div>
+
+{% if entries %}
+  <div class="log-table">
+    <div class="log-header">
+      <div>#</div>
+      <div>Время (UTC)</div>
+      <div>Действие</div>
+      <div>Пациент</div>
+      <div>Детали</div>
+      <div>IP</div>
+    </div>
+    {% for entry in entries %}
+      <details>
+        <summary>
+          <span class="log-index">#{{ entry.index }}</span>
+          <span class="log-ts">{{ entry.ts }}</span>
+          <span class="log-action">{{ entry.action_label }}</span>
+          <span class="log-patient">{{ entry.patient }}</span>
+          <span class="log-detail">{{ entry.detail }}</span>
+          <span class="log-ip">{{ entry.ip }}</span>
+        </summary>
+        <pre class="log-full">{{ entry.full_json }}</pre>
+      </details>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="log-empty">
+    Журнал пуст. Записи появляются, когда врач назначает/снимает/просматривает
+    тесты или сбрасывает пароль пациента.
+  </div>
+{% endif %}
+{% endblock %}

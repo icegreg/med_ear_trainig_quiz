@@ -49,7 +49,8 @@ from ..schemas import (
     TransferResultSchema,
     UpdatePatientSchema,
 )
-from ..utils import generate_patient_login
+from ..utils import generate_patient_login, get_client_ip
+from .. import client_logs, doctor_logs
 
 router = Router()
 
@@ -187,6 +188,12 @@ def mark_results_viewed(request, patient_id: int):
         status=PatientQuizAssignment.Status.COMPLETED,
         reviewed_at__isnull=True,
     ).update(reviewed_at=timezone.now())
+    if count:
+        doctor_logs.append_action(
+            request.doctor.id, 'review_results',
+            patient=patient, detail=f'Просмотрено тестов: {count}',
+            ip=get_client_ip(request),
+        )
     return 200, {'reviewed': count}
 
 
@@ -200,6 +207,20 @@ def reset_patient_password(request, patient_id: int, payload: ResetPasswordSchem
     user = patient.user
     user.set_password(payload.new_password)
     user.save(update_fields=['password'])
+
+    ip = get_client_ip(request)
+    # Лог врача — факт сброса, без самого пароля.
+    doctor_logs.append_action(
+        request.doctor.id, 'reset_password', patient=patient, ip=ip,
+    )
+    # Пометка в логе пациента — просто факт смены пароля, без пароля.
+    client_logs.append_entries(patient.id, [{
+        'client_ts': timezone.now().isoformat(),
+        'method': 'SYSTEM',
+        'path': 'Пароль изменён врачом',
+        'event': 'password_changed',
+        'status_code': None,
+    }])
     return 200, {'id': patient.id, 'username': user.username}
 
 
@@ -300,7 +321,12 @@ def unassign_quiz(request, patient_id: int, assignment_id: int):
     )
     if assignment.status == PatientQuizAssignment.Status.COMPLETED:
         return 400, {'status': 'error', 'message': 'Нельзя снять пройденный тест.'}
+    quiz_title = assignment.quiz.title
     assignment.delete()
+    doctor_logs.append_action(
+        request.doctor.id, 'unassign_quiz',
+        patient=patient, detail=quiz_title, ip=get_client_ip(request),
+    )
     return 200, {'status': 'ok', 'message': 'Назначение снято.'}
 
 
@@ -321,6 +347,10 @@ def assign_quiz(request, patient_id: int, payload: AssignQuizSchema):
         quiz=quiz,
         starts_at=payload.starts_at,
         ends_at=payload.ends_at,
+    )
+    doctor_logs.append_action(
+        request.doctor.id, 'assign_quiz',
+        patient=patient, detail=quiz.title, ip=get_client_ip(request),
     )
     return 200, {
         'id': assignment.id,

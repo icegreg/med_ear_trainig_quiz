@@ -9,7 +9,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import client_logs
+from . import client_logs, doctor_logs
 
 # Версия бэкенда видна в шапке и на главной странице админки.
 admin.site.site_header = f'Тест слуха · бэкенд v{settings.BACKEND_VERSION}'
@@ -120,7 +120,7 @@ class DoctorChangeForm(forms.ModelForm):
 
 @admin.register(Doctor)
 class DoctorAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'clinic', 'email', 'logging_enabled', 'created_at']
+    list_display = ['__str__', 'clinic', 'email', 'logging_enabled', 'logs_link', 'created_at']
     list_filter = ['logging_enabled']
     search_fields = ['last_name', 'first_name', 'clinic']
     readonly_fields = ['id', 'created_at']
@@ -135,6 +135,87 @@ class DoctorAdmin(admin.ModelAdmin):
     @admin.display(description='Email')
     def email(self, obj):
         return obj.user.email
+
+    @admin.display(description='Журнал действий')
+    def logs_link(self, obj):
+        url = reverse('admin:core_doctor_logs', args=[obj.pk])
+        count = doctor_logs.line_count(obj.pk)
+        if count == 0:
+            return format_html('<a href="{}">пусто</a>', url)
+        return format_html('<a href="{}">{} записей</a>', url, count)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<uuid:doctor_id>/logs/',
+                self.admin_site.admin_view(self.view_logs),
+                name='core_doctor_logs',
+            ),
+            path(
+                '<uuid:doctor_id>/logs/download/',
+                self.admin_site.admin_view(self.download_logs),
+                name='core_doctor_logs_download',
+            ),
+        ]
+        return custom + urls
+
+    def view_logs(self, request, doctor_id):
+        import json as _json
+        doctor = get_object_or_404(Doctor, pk=doctor_id)
+        max_lines = int(request.GET.get('lines', 500))
+        max_lines = max(10, min(max_lines, 10000))
+
+        total = doctor_logs.line_count(doctor.pk)
+        raw_lines = doctor_logs.read_tail(doctor.pk, max_lines=max_lines)
+
+        entries = []
+        for idx, ln in enumerate(reversed(raw_lines)):
+            try:
+                data = _json.loads(ln)
+            except Exception:
+                entries.append({
+                    'index': total - idx, 'ts': '?', 'action_label': '?',
+                    'patient': ln[:120], 'detail': '', 'ip': '',
+                    'full_json': ln,
+                })
+                continue
+            entries.append({
+                'index': total - idx,
+                'ts': data.get('ts', '?'),
+                'action': data.get('action', ''),
+                'action_label': data.get('action_label', data.get('action', '?')),
+                'patient': data.get('patient') or '—',
+                'detail': data.get('detail', ''),
+                'ip': data.get('ip', ''),
+                'full_json': _json.dumps(data, ensure_ascii=False, indent=2),
+            })
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Журнал действий — {doctor}',
+            'doctor': doctor,
+            'entries': entries,
+            'line_count': total,
+            'shown_count': len(entries),
+            'file_size_kb': doctor_logs.file_size(doctor.pk) / 1024,
+            'max_lines': max_lines,
+            'opts': self.model._meta,
+            'doctor_change_url': reverse('admin:core_doctor_change', args=[doctor.pk]),
+            'download_url': reverse('admin:core_doctor_logs_download', args=[doctor.pk]),
+        }
+        return render(request, 'admin/core/doctor/action_logs.html', context)
+
+    def download_logs(self, request, doctor_id):
+        doctor = get_object_or_404(Doctor, pk=doctor_id)
+        path_ = doctor_logs.log_path(doctor.pk)
+        if not path_.exists():
+            raise Http404('Журнал пуст')
+        return FileResponse(
+            open(path_, 'rb'),
+            as_attachment=True,
+            filename=f'doctor_{doctor.pk}_actions.jsonl',
+        )
 
 
 # --- Patient ---
