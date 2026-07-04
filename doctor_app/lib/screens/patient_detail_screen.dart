@@ -11,10 +11,8 @@ import '../core/web_audio_player.dart';
 import '../widgets/credentials_card.dart';
 
 import '../models/assignment.dart';
-import '../models/audio_file.dart';
 import '../models/doctor.dart';
 import '../models/patient.dart';
-import '../models/quiz.dart';
 import '../models/quiz_result.dart';
 import '../providers/auth_provider.dart';
 import '../providers/audio_library_provider.dart';

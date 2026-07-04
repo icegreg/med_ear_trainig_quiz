@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/api_client.dart';
 import '../models/audio_category.dart';
 import '../models/audio_file.dart';
 import 'auth_provider.dart';
