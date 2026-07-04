@@ -85,6 +85,26 @@ class AuthRequiredTest(TestCase):
         )
         self.assertEqual(resp.status_code, 401)
 
+    def test_doctor_suggest_login_requires_auth(self):
+        resp = self.client.post(
+            '/api/doctors/patients/suggest-login',
+            data='{"last_name": "Иванов"}',
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_doctor_reset_password_requires_auth(self):
+        resp = self.client.post(
+            '/api/doctors/patients/1/reset-password',
+            data='{"new_password": "x"}',
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_doctor_mark_results_viewed_requires_auth(self):
+        resp = self.client.post('/api/doctors/patients/1/mark-results-viewed')
+        self.assertEqual(resp.status_code, 401)
+
     def test_doctor_set_starting_sound_requires_auth(self):
         resp = self.client.put(
             '/api/doctors/patients/1/starting-sound',

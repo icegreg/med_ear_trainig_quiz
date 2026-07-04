@@ -69,3 +69,8 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final api = ref.watch(apiClientProvider);
   return AuthNotifier(storage, api);
 });
+
+/// Профиль текущего врача (ФИО, клиника) — например, для PDF с кредами.
+final doctorProfileProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  return ref.watch(apiClientProvider).getProfile();
+});

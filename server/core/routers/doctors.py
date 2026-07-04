@@ -30,6 +30,8 @@ from ..schemas import (
     DoctorListSchema,
     DoctorSchema,
     ErrorSchema,
+    LoginSuggestionSchema,
+    MarkViewedResponseSchema,
     MoveAudioSchema,
     NotificationsListSchema,
     NotificationSchema,
@@ -38,12 +40,16 @@ from ..schemas import (
     QuizSummarySchema,
     QuizWithAudioSchema,
     RenameCategorySchema,
+    ResetPasswordResponseSchema,
+    ResetPasswordSchema,
     SetStartingSoundSchema,
     SuggestedTitleSchema,
+    SuggestLoginSchema,
     TransferPatientSchema,
     TransferResultSchema,
     UpdatePatientSchema,
 )
+from ..utils import generate_patient_login
 
 router = Router()
 
@@ -86,6 +92,13 @@ def get_my_patients(request, search: str | None = None):
             'quiz_assignments',
             filter=Q(quiz_assignments__status=PatientQuizAssignment.Status.COMPLETED),
         ),
+        _unreviewed_count=Count(
+            'quiz_assignments',
+            filter=Q(
+                quiz_assignments__status=PatientQuizAssignment.Status.COMPLETED,
+                quiz_assignments__reviewed_at__isnull=True,
+            ),
+        ),
     ).order_by('last_name', 'first_name')
     return [_patient_dict(p) for p in qs]
 
@@ -93,6 +106,7 @@ def get_my_patients(request, search: str | None = None):
 def _patient_dict(p: Patient) -> dict:
     assigned = getattr(p, '_assigned_count', None)
     completed = getattr(p, '_completed_count', None)
+    unreviewed = getattr(p, '_unreviewed_count', None)
     if assigned is None:
         assigned = p.quiz_assignments.filter(
             status=PatientQuizAssignment.Status.ASSIGNED
@@ -100,6 +114,11 @@ def _patient_dict(p: Patient) -> dict:
     if completed is None:
         completed = p.quiz_assignments.filter(
             status=PatientQuizAssignment.Status.COMPLETED
+        ).count()
+    if unreviewed is None:
+        unreviewed = p.quiz_assignments.filter(
+            status=PatientQuizAssignment.Status.COMPLETED,
+            reviewed_at__isnull=True,
         ).count()
     return {
         'id': p.id,
@@ -114,6 +133,7 @@ def _patient_dict(p: Patient) -> dict:
         'birth_date': p.birth_date,
         'assigned_count': assigned,
         'completed_count': completed,
+        'unreviewed_count': unreviewed,
         'created_at': p.created_at,
     }
 
@@ -136,6 +156,50 @@ def create_patient(request, payload: CreatePatientSchema):
         patronymic=payload.patronymic,
         birth_date=payload.birth_date,
     )
+    return 200, {'id': patient.id, 'username': user.username}
+
+
+@router.post('/patients/suggest-login', response=LoginSuggestionSchema)
+def suggest_patient_login(request, payload: SuggestLoginSchema):
+    """Предложить свободный логин по ФИО (транслит фамилии + инициалы).
+
+    Если базовый логин занят — суффикс из 2 цифр года рождения, затем
+    числовой автоинкремент.
+    """
+    login = generate_patient_login(
+        last_name=payload.last_name,
+        first_name=payload.first_name,
+        patronymic=payload.patronymic,
+        birth_date=payload.birth_date,
+    )
+    return {'login': login}
+
+
+@router.post(
+    '/patients/{patient_id}/mark-results-viewed',
+    response={200: MarkViewedResponseSchema, 404: ErrorSchema},
+)
+def mark_results_viewed(request, patient_id: int):
+    """Отметить все пройденные тесты пациента как просмотренные врачом."""
+    patient = get_object_or_404(Patient, id=patient_id, doctor=request.doctor)
+    count = PatientQuizAssignment.objects.filter(
+        patient=patient,
+        status=PatientQuizAssignment.Status.COMPLETED,
+        reviewed_at__isnull=True,
+    ).update(reviewed_at=timezone.now())
+    return 200, {'reviewed': count}
+
+
+@router.post(
+    '/patients/{patient_id}/reset-password',
+    response={200: ResetPasswordResponseSchema, 404: ErrorSchema},
+)
+def reset_patient_password(request, patient_id: int, payload: ResetPasswordSchema):
+    """Сбросить пароль пациента текущего врача на новый."""
+    patient = get_object_or_404(Patient, id=patient_id, doctor=request.doctor)
+    user = patient.user
+    user.set_password(payload.new_password)
+    user.save(update_fields=['password'])
     return 200, {'id': patient.id, 'username': user.username}
 
 

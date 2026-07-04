@@ -114,6 +114,12 @@ class _PatientsListScreenState extends ConsumerState<PatientsListScreen> {
                                   label: 'Пройдено: ${p.completedCount}',
                                   color: p.completedCount > 0 ? Colors.green : Colors.grey,
                                 ),
+                                if (p.unreviewedCount > 0)
+                                  _CountBadge(
+                                    icon: Icons.mark_email_unread,
+                                    label: 'Непроверенных: ${p.unreviewedCount}',
+                                    color: Colors.blue,
+                                  ),
                               ],
                             ),
                           ],
