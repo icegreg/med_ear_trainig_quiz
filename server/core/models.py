@@ -319,6 +319,10 @@ class PatientQuizAssignment(models.Model):
         'Крайний срок', null=True, blank=True,
         help_text='Когда тест перестаёт быть доступен. null = бессрочно.',
     )
+    reviewed_at = models.DateTimeField(
+        'Просмотрено врачом', null=True, blank=True,
+        help_text='Когда врач впервые открыл результат. null = не просмотрен.',
+    )
 
     class Meta:
         verbose_name = 'Назначение квиза'

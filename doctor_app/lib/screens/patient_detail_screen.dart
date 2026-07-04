@@ -1,10 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/credentials_pdf.dart';
 import '../core/date_utils.dart';
 import '../core/media_auth.dart';
+import '../core/password_gen.dart';
 import '../core/web_audio_player.dart';
+import '../widgets/credentials_card.dart';
 
 import '../models/assignment.dart';
 import '../models/audio_file.dart';
@@ -16,6 +20,13 @@ import '../providers/auth_provider.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/patients_provider.dart';
 import '../providers/quiz_provider.dart';
+
+/// ФИО врача из профиля (для PDF с кредами).
+String _doctorNameFrom(Map<String, dynamic> p) => [
+      p['last_name'],
+      p['first_name'],
+      p['patronymic'],
+    ].where((s) => s != null && (s as String).isNotEmpty).join(' ');
 
 /// Ответы пациента хранятся как «да»/«нет», но врачу показываем «Слышу»/«Не слышу».
 String _answerLabel(dynamic raw) {
@@ -30,13 +41,15 @@ String _answerLabel(dynamic raw) {
   }
 }
 
-final _assignmentsProvider = FutureProvider.family<List<Assignment>, int>((ref, patientId) async {
+final _assignmentsProvider =
+    FutureProvider.family<List<Assignment>, int>((ref, patientId) async {
   final api = ref.watch(apiClientProvider);
   final data = await api.getPatientAssignments(patientId);
   return data.map((e) => Assignment.fromJson(e)).toList();
 });
 
-final _resultsProvider = FutureProvider.family<List<QuizResult>, int>((ref, patientId) async {
+final _resultsProvider =
+    FutureProvider.family<List<QuizResult>, int>((ref, patientId) async {
   final api = ref.watch(apiClientProvider);
   final data = await api.getPatientResults(patientId);
   return data.map((e) => QuizResult.fromJson(e)).toList();
@@ -53,14 +66,71 @@ class PatientDetailScreen extends ConsumerStatefulWidget {
   const PatientDetailScreen({super.key, required this.patientId});
 
   @override
-  ConsumerState<PatientDetailScreen> createState() => _PatientDetailScreenState();
+  ConsumerState<PatientDetailScreen> createState() =>
+      _PatientDetailScreenState();
 }
 
 class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Открытие карточки = врач просмотрел результаты пациента.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _markResultsViewed());
+  }
+
+  Future<void> _markResultsViewed() async {
+    try {
+      final n =
+          await ref.read(apiClientProvider).markResultsViewed(widget.patientId);
+      // Обновляем список/дашборд, чтобы бейдж «непроверенных» исчез.
+      if (n > 0) ref.invalidate(patientsProvider);
+    } catch (_) {
+      // Не критично для просмотра карточки.
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _refresh() {
     ref.invalidate(patientsProvider);
     ref.invalidate(_assignmentsProvider(widget.patientId));
     ref.invalidate(_resultsProvider(widget.patientId));
+  }
+
+  /// Scroll the page with PageUp/PageDown/Home/End. Flutter's built-in keyboard
+  /// scrolling only works when the focused widget is inside the scroll view;
+  /// driving the controller here makes it work regardless of focus.
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (!_scrollController.hasClients) return KeyEventResult.ignored;
+    final pos = _scrollController.position;
+    final page = pos.viewportDimension * 0.85;
+    double? target;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.pageDown) {
+      target = pos.pixels + page;
+    } else if (key == LogicalKeyboardKey.pageUp) {
+      target = pos.pixels - page;
+    } else if (key == LogicalKeyboardKey.home) {
+      target = 0;
+    } else if (key == LogicalKeyboardKey.end) {
+      target = pos.maxScrollExtent;
+    }
+    if (target == null) return KeyEventResult.ignored;
+    _scrollController.animateTo(
+      target.clamp(0.0, pos.maxScrollExtent),
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+    return KeyEventResult.handled;
   }
 
   Patient? _findPatient(List<Patient> list) {
@@ -86,6 +156,8 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
         ),
       ),
       body: patientsAsync.when(
+        // Не мигаем спиннером при фоновом рефетче (после mark-results-viewed).
+        skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Ошибка: $e')),
         data: (patients) {
@@ -93,138 +165,178 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
           if (patient == null) {
             return const Center(child: Text('Пациент не найден'));
           }
-          return RefreshIndicator(
-            onRefresh: () async => _refresh(),
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                // Info card
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+          return Focus(
+            autofocus: true,
+            onKeyEvent: _handleKey,
+            child: RefreshIndicator(
+              onRefresh: () async => _refresh(),
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: true,
+                child: ListView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    // Info card
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(patient.displayName,
-                                  style: Theme.of(context).textTheme.headlineSmall),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(patient.displayName,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  tooltip: 'Редактировать ФИО',
+                                  onPressed: () =>
+                                      _showFioDialog(context, patient),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              tooltip: 'Редактировать ФИО',
-                              onPressed: () => _showFioDialog(context, patient),
-                            ),
+                            const SizedBox(height: 4),
+                            Text('Логин: ${patient.username}',
+                                style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Создан: ${patient.createdAt.toLocal().toString().substring(0, 10)}',
+                                style: Theme.of(context).textTheme.bodySmall),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text('Логин: ${patient.username}',
-                            style: Theme.of(context).textTheme.bodySmall),
-                        const SizedBox(height: 4),
-                        Text('Создан: ${patient.createdAt.toLocal().toString().substring(0, 10)}',
-                            style: Theme.of(context).textTheme.bodySmall),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Birth date
+                    _BirthDateSection(patient: patient, onChanged: _refresh),
+                    const SizedBox(height: 16),
+
+                    // Starting sound
+                    _StartingSoundSection(
+                        patient: patient, onChanged: _refresh),
+                    const SizedBox(height: 16),
+
+                    // Actions
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () =>
+                              _showAssignQuizDialog(context, patient),
+                          icon: const Icon(Icons.add_task),
+                          label: const Text('Назначить тест'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _showTransferDialog(context, patient),
+                          icon: const Icon(Icons.swap_horiz),
+                          label: const Text('Передать'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const Key('btn_reset_password'),
+                          onPressed: () => _resetPassword(context, patient),
+                          icon: const Icon(Icons.password),
+                          label: const Text('Сбросить пароль'),
+                        ),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-                // Birth date
-                _BirthDateSection(patient: patient, onChanged: _refresh),
-                const SizedBox(height: 16),
-
-                // Starting sound
-                _StartingSoundSection(patient: patient, onChanged: _refresh),
-                const SizedBox(height: 16),
-
-                // Actions
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: () => _showAssignQuizDialog(context, patient),
-                      icon: const Icon(Icons.add_task),
-                      label: const Text('Назначить тест'),
+                    // Assignments
+                    Text('Назначенные тесты',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    assignmentsAsync.when(
+                      data: (assignments) {
+                        final active =
+                            assignments.where((a) => a.isActive).toList();
+                        if (active.isEmpty)
+                          return const Text('Нет активных назначений');
+                        return Column(
+                          children: active
+                              .map((a) => _AssignmentTile(
+                                    assignment: a,
+                                    onUnassign: () => _confirmUnassign(
+                                        context, a.id, a.quizTitle),
+                                  ))
+                              .toList(),
+                        );
+                      },
+                      loading: () => const LinearProgressIndicator(),
+                      error: (e, _) => Text('Ошибка: $e'),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: () => _showTransferDialog(context, patient),
-                      icon: const Icon(Icons.swap_horiz),
-                      label: const Text('Передать'),
+                    const SizedBox(height: 24),
+
+                    // Results
+                    Text('Результаты',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    resultsAsync.when(
+                      data: (results) {
+                        final expired = (assignmentsAsync.valueOrNull ??
+                                const <Assignment>[])
+                            .where((a) => a.isExpired)
+                            .toList();
+                        if (results.isEmpty && expired.isEmpty) {
+                          return const Text('Нет результатов');
+                        }
+                        return Column(
+                          children: [
+                            ...results.map((r) => Card(
+                                  child: ExpansionTile(
+                                    title: Row(
+                                      children: [
+                                        Expanded(child: Text(r.quizTitle)),
+                                        const _StatusBadge(
+                                            label: 'Пройден',
+                                            color: Colors.green),
+                                      ],
+                                    ),
+                                    subtitle: Text(
+                                        'Баллы: ${r.score ?? '-'} | ${r.submittedAt.toLocal().toString().substring(0, 16)}'),
+                                    children: r.answers
+                                        .map<Widget>((a) => ListTile(
+                                              dense: true,
+                                              title: Text(
+                                                  'Вопрос ${a['question_id']}'),
+                                              trailing: Text(
+                                                  _answerLabel(a['answer'])),
+                                            ))
+                                        .toList(),
+                                  ),
+                                )),
+                            ...expired.map((a) => Card(
+                                  child: ListTile(
+                                    title: Row(
+                                      children: [
+                                        Expanded(child: Text(a.quizTitle)),
+                                        const _StatusBadge(
+                                            label: 'Просрочено',
+                                            color: Colors.orange),
+                                      ],
+                                    ),
+                                    subtitle: a.endsAt != null
+                                        ? Text(
+                                            'Срок истёк: ${a.endsAt!.toLocal().toString().substring(0, 16)}')
+                                        : null,
+                                  ),
+                                )),
+                          ],
+                        );
+                      },
+                      loading: () => const LinearProgressIndicator(),
+                      error: (e, _) => Text('Ошибка: $e'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-
-                // Assignments
-                Text('Назначенные тесты', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                assignmentsAsync.when(
-                  data: (assignments) {
-                    final active = assignments.where((a) => a.isActive).toList();
-                    if (active.isEmpty) return const Text('Нет активных назначений');
-                    return Column(
-                      children: active.map((a) => _AssignmentTile(
-                        assignment: a,
-                        onUnassign: () => _confirmUnassign(context, a.id, a.quizTitle),
-                      )).toList(),
-                    );
-                  },
-                  loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text('Ошибка: $e'),
-                ),
-                const SizedBox(height: 24),
-
-                // Results
-                Text('Результаты', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                resultsAsync.when(
-                  data: (results) {
-                    final expired = (assignmentsAsync.valueOrNull ?? const <Assignment>[])
-                        .where((a) => a.isExpired)
-                        .toList();
-                    if (results.isEmpty && expired.isEmpty) {
-                      return const Text('Нет результатов');
-                    }
-                    return Column(
-                      children: [
-                        ...results.map((r) => Card(
-                          child: ExpansionTile(
-                            title: Row(
-                              children: [
-                                Expanded(child: Text(r.quizTitle)),
-                                const _StatusBadge(label: 'Пройден', color: Colors.green),
-                              ],
-                            ),
-                            subtitle: Text('Баллы: ${r.score ?? '-'} | ${r.submittedAt.toLocal().toString().substring(0, 16)}'),
-                            children: r.answers.map<Widget>((a) => ListTile(
-                              dense: true,
-                              title: Text('Вопрос ${a['question_id']}'),
-                              trailing: Text(_answerLabel(a['answer'])),
-                            )).toList(),
-                          ),
-                        )),
-                        ...expired.map((a) => Card(
-                          child: ListTile(
-                            title: Row(
-                              children: [
-                                Expanded(child: Text(a.quizTitle)),
-                                const _StatusBadge(label: 'Просрочено', color: Colors.orange),
-                              ],
-                            ),
-                            subtitle: a.endsAt != null
-                                ? Text('Срок истёк: ${a.endsAt!.toLocal().toString().substring(0, 16)}')
-                                : null,
-                          ),
-                        )),
-                      ],
-                    );
-                  },
-                  loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text('Ошибка: $e'),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -232,28 +344,85 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
     );
   }
 
-  Future<void> _confirmUnassign(BuildContext context, int assignmentId, String quizTitle) async {
+  Future<void> _resetPassword(BuildContext context, Patient patient) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Сбросить пароль?'),
+        content: Text(
+          'Для пациента ${patient.displayName} будет сгенерирован новый '
+          'пароль. Старый перестанет действовать.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          FilledButton(
+              key: const Key('confirm_reset_password'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сбросить')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final newPassword = generatePassword();
+    try {
+      final result =
+          await ref.read(apiClientProvider).resetPassword(patient.id, newPassword);
+      Map<String, dynamic>? profile;
+      try {
+        profile = await ref.read(doctorProfileProvider.future);
+      } catch (_) {}
+
+      if (!context.mounted) return;
+      final creds = PatientCredentials(
+        fullName: patient.displayName,
+        login: result['username'] as String,
+        password: newPassword,
+        doctorName: profile == null ? null : _doctorNameFrom(profile),
+        clinic: profile?['clinic'] as String?,
+        generatedAt: DateTime.now(),
+      );
+      await showCredentialsDialog(context, creds, title: 'Пароль сброшен');
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось сбросить пароль: $e')),
+      );
+    }
+  }
+
+  Future<void> _confirmUnassign(
+      BuildContext context, int assignmentId, String quizTitle) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Снять назначение?'),
         content: Text('Пациенту больше не будет доступен тест «$quizTitle».'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Снять')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Снять')),
         ],
       ),
     );
     if (confirmed != true) return;
     try {
-      await ref.read(apiClientProvider).unassignQuiz(widget.patientId, assignmentId);
+      await ref
+          .read(apiClientProvider)
+          .unassignQuiz(widget.patientId, assignmentId);
       _refresh();
       ref.invalidate(patientsProvider);
     } on DioException catch (e) {
       if (!mounted) return;
-      final msg = (e.response?.data is Map && e.response!.data['message'] != null)
-          ? e.response!.data['message'] as String
-          : 'Ошибка';
+      final msg =
+          (e.response?.data is Map && e.response!.data['message'] != null)
+              ? e.response!.data['message'] as String
+              : 'Ошибка';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -296,7 +465,8 @@ class _StartingSoundSection extends ConsumerStatefulWidget {
   const _StartingSoundSection({required this.patient, required this.onChanged});
 
   @override
-  ConsumerState<_StartingSoundSection> createState() => _StartingSoundSectionState();
+  ConsumerState<_StartingSoundSection> createState() =>
+      _StartingSoundSectionState();
 }
 
 class _StartingSoundSectionState extends ConsumerState<_StartingSoundSection> {
@@ -362,7 +532,8 @@ class _StartingSoundSectionState extends ConsumerState<_StartingSoundSection> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        title: Text('Стартовый звук', style: Theme.of(context).textTheme.titleSmall),
+        title: Text('Стартовый звук',
+            style: Theme.of(context).textTheme.titleSmall),
         subtitle: Text(selectedLabel),
         childrenPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         children: [
@@ -418,7 +589,8 @@ class _SoundTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final bg = selected ? scheme.primaryContainer : scheme.surfaceContainerHighest;
+    final bg =
+        selected ? scheme.primaryContainer : scheme.surfaceContainerHighest;
     final fg = selected ? scheme.onPrimaryContainer : scheme.onSurface;
     final borderColor = selected ? scheme.primary : scheme.outlineVariant;
 
@@ -438,7 +610,8 @@ class _SoundTile extends StatelessWidget {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor, width: selected ? 2 : 1),
+                    border:
+                        Border.all(color: borderColor, width: selected ? 2 : 1),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -453,7 +626,8 @@ class _SoundTile extends StatelessWidget {
                         style: TextStyle(
                           color: fg,
                           fontSize: 12,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                     ],
@@ -511,7 +685,8 @@ class _BirthDateSection extends ConsumerWidget {
     await _save(context, ref, picked);
   }
 
-  Future<void> _save(BuildContext context, WidgetRef ref, DateTime? date) async {
+  Future<void> _save(
+      BuildContext context, WidgetRef ref, DateTime? date) async {
     final api = ref.read(apiClientProvider);
     try {
       await api.setBirthDate(patient.id, date);
@@ -534,13 +709,16 @@ class _BirthDateSection extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Дата рождения', style: Theme.of(context).textTheme.titleSmall),
+            Text('Дата рождения',
+                style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    bd == null ? 'Не указана' : '${_format(bd)} (${formatAge(bd)})',
+                    bd == null
+                        ? 'Не указана'
+                        : '${_format(bd)} (${formatAge(bd)})',
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 ),
@@ -597,10 +775,12 @@ class _AssignQuizDialogState extends ConsumerState<_AssignQuizDialog> {
                   labelText: 'Выберите тест',
                   border: OutlineInputBorder(),
                 ),
-                items: quizzes.map((q) => DropdownMenuItem(
-                  value: q.id,
-                  child: Text('${q.title} (${q.questionCount} вопр.)'),
-                )).toList(),
+                items: quizzes
+                    .map((q) => DropdownMenuItem(
+                          value: q.id,
+                          child: Text('${q.title} (${q.questionCount} вопр.)'),
+                        ))
+                    .toList(),
                 onChanged: (v) => setState(() => _selectedQuizId = v),
               ),
               loading: () => const CircularProgressIndicator(),
@@ -608,7 +788,8 @@ class _AssignQuizDialogState extends ConsumerState<_AssignQuizDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
@@ -621,7 +802,9 @@ class _AssignQuizDialogState extends ConsumerState<_AssignQuizDialog> {
         FilledButton(
           onPressed: _loading || _selectedQuizId == null ? null : _assign,
           child: _loading
-              ? const SizedBox(height: 20, width: 20,
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Назначить'),
         ),
@@ -630,18 +813,30 @@ class _AssignQuizDialogState extends ConsumerState<_AssignQuizDialog> {
   }
 
   Future<void> _assign() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    // Capture the app-level messenger before any await / pop so we can show
+    // the confirmation even after the dialog is closed.
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final api = ref.read(apiClientProvider);
       await api.assignQuiz(widget.patientId, _selectedQuizId!);
       widget.onAssigned();
       if (mounted) Navigator.pop(context);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Тест назначен.')),
+      );
     } on DioException catch (e) {
       setState(() {
         _error = (e.response?.data is Map)
-            ? e.response!.data['message'] ?? 'Ошибка'
-            : 'Ошибка назначения';
+            ? e.response!.data['message'] ?? 'Ошибка назначения.'
+            : 'Ошибка назначения. Проверьте соединение и попробуйте ещё раз.';
       });
+    } catch (e) {
+      // Any non-Dio error must surface instead of silently closing the dialog.
+      setState(() => _error = 'Не удалось назначить тест: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -683,10 +878,13 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                   labelText: 'Выберите врача',
                   border: OutlineInputBorder(),
                 ),
-                items: doctors.map((d) => DropdownMenuItem(
-                  value: d.id,
-                  child: Text('${d.fullName}${d.clinic.isNotEmpty ? ' (${d.clinic})' : ''}'),
-                )).toList(),
+                items: doctors
+                    .map((d) => DropdownMenuItem(
+                          value: d.id,
+                          child: Text(
+                              '${d.fullName}${d.clinic.isNotEmpty ? ' (${d.clinic})' : ''}'),
+                        ))
+                    .toList(),
                 onChanged: (v) => setState(() => _selectedDoctorId = v),
               ),
               loading: () => const CircularProgressIndicator(),
@@ -694,7 +892,8 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
@@ -707,7 +906,9 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
         FilledButton(
           onPressed: _loading || _selectedDoctorId == null ? null : _transfer,
           child: _loading
-              ? const SizedBox(height: 20, width: 20,
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Передать'),
         ),
@@ -716,7 +917,10 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
   }
 
   Future<void> _transfer() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final api = ref.read(apiClientProvider);
       await api.transferPatient(widget.patient.id, _selectedDoctorId!);
@@ -768,7 +972,10 @@ class _FioDialogState extends ConsumerState<_FioDialog> {
   }
 
   Future<void> _save() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final api = ref.read(apiClientProvider);
       await api.updatePatient(
@@ -820,7 +1027,8 @@ class _FioDialogState extends ConsumerState<_FioDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
@@ -833,7 +1041,9 @@ class _FioDialogState extends ConsumerState<_FioDialog> {
         FilledButton(
           onPressed: _loading ? null : _save,
           child: _loading
-              ? const SizedBox(height: 16, width: 16,
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Сохранить'),
         ),
@@ -935,7 +1145,9 @@ class _AssignmentTileState extends ConsumerState<_AssignmentTile> {
                         title: Text(af.title),
                         trailing: IconButton(
                           icon: Icon(
-                            _playingId == af.id ? Icons.stop_circle : Icons.play_circle,
+                            _playingId == af.id
+                                ? Icons.stop_circle
+                                : Icons.play_circle,
                           ),
                           color: Theme.of(context).colorScheme.primary,
                           onPressed: () => _togglePlay(af.id, af.fileUrl),

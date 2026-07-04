@@ -67,6 +67,17 @@ class DashboardScreen extends ConsumerWidget {
                   onTap: () => context.go('/patients'),
                 ),
                 _DashCard(
+                  icon: Icons.mark_email_unread,
+                  title: 'Непроверенные тесты',
+                  value: patients.when(
+                    data: (list) =>
+                        '${list.fold<int>(0, (s, p) => s + p.unreviewedCount)}',
+                    loading: () => '...',
+                    error: (_, __) => '-',
+                  ),
+                  onTap: () => context.go('/patients'),
+                ),
+                _DashCard(
                   icon: Icons.notifications,
                   title: 'Непрочитанные',
                   value: '${notifs.unreadCount}',

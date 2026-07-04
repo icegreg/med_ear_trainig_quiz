@@ -38,6 +38,7 @@ class PatientSchema(Schema):
     birth_date: date | None = None
     assigned_count: int = 0
     completed_count: int = 0
+    unreviewed_count: int = 0
     logging_enabled: bool = False
     created_at: datetime
 
@@ -87,6 +88,30 @@ class UpdatePatientSchema(Schema):
 class CreatePatientResponseSchema(Schema):
     id: int
     username: str
+
+
+class SuggestLoginSchema(Schema):
+    last_name: str = ''
+    first_name: str = ''
+    patronymic: str = ''
+    birth_date: date | None = None
+
+
+class LoginSuggestionSchema(Schema):
+    login: str
+
+
+class ResetPasswordSchema(Schema):
+    new_password: str
+
+
+class ResetPasswordResponseSchema(Schema):
+    id: int
+    username: str
+
+
+class MarkViewedResponseSchema(Schema):
+    reviewed: int
 
 
 class SetStartingSoundSchema(Schema):

@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/credentials_pdf.dart';
+import '../core/password_gen.dart';
 import '../providers/auth_provider.dart';
 import '../providers/patients_provider.dart';
+import '../widgets/credentials_card.dart';
 
 class AddPatientScreen extends ConsumerStatefulWidget {
   const AddPatientScreen({super.key});
@@ -21,10 +26,23 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
   final _patronymicCtrl = TextEditingController();
   DateTime? _birthDate;
   bool _loading = false;
+  bool _obscurePassword = true;
   String? _error;
+
+  /// Врач вручную поправил логин — перестаём автогенерировать.
+  bool _loginEdited = false;
+  bool _generatingLogin = false;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordCtrl.text = generatePassword();
+  }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     _lastNameCtrl.dispose();
@@ -45,15 +63,55 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
       lastDate: now,
       helpText: 'Дата рождения',
     );
-    if (picked != null) setState(() => _birthDate = picked);
+    if (picked != null) {
+      setState(() => _birthDate = picked);
+      _scheduleLoginGen();
+    }
+  }
+
+  /// Дебаунс автогенерации логина при вводе ФИО.
+  void _scheduleLoginGen() {
+    if (_loginEdited) return;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), _generateLogin);
+  }
+
+  Future<void> _generateLogin() async {
+    final lastName = _lastNameCtrl.text.trim();
+    if (lastName.isEmpty) return; // нечего генерировать
+    setState(() => _generatingLogin = true);
+    try {
+      final login = await ref.read(apiClientProvider).suggestLogin(
+            lastName: lastName,
+            firstName: _firstNameCtrl.text.trim(),
+            patronymic: _patronymicCtrl.text.trim(),
+            birthDate: _birthDate,
+          );
+      if (!mounted || _loginEdited) return;
+      _usernameCtrl.text = login;
+    } catch (_) {
+      // Не критично: врач может ввести логин вручную.
+    } finally {
+      if (mounted) setState(() => _generatingLogin = false);
+    }
+  }
+
+  void _regeneratePassword() {
+    setState(() => _passwordCtrl.text = generatePassword());
   }
 
   Future<void> _submit() async {
     final username = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text;
-    if (username.isEmpty || password.isEmpty) return;
+    if (username.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Введите логин и пароль');
+      return;
+    }
 
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final api = ref.read(apiClientProvider);
       final result = await api.createPatient(
@@ -65,22 +123,48 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
         birthDate: _birthDate,
       );
       ref.invalidate(patientsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Пациент ${result['username']} создан')),
-        );
-        context.go('/patients/${result['id']}');
-      }
+
+      // Профиль врача для PDF (не блокируем показ карточки при ошибке).
+      Map<String, dynamic>? profile;
+      try {
+        profile = await ref.read(doctorProfileProvider.future);
+      } catch (_) {}
+
+      if (!mounted) return;
+      final creds = PatientCredentials(
+        fullName: _composeFullName(),
+        login: result['username'] as String,
+        password: password,
+        doctorName: profile == null ? null : _doctorName(profile),
+        clinic: profile?['clinic'] as String?,
+        generatedAt: DateTime.now(),
+      );
+      await showCredentialsDialog(context, creds, title: 'Пациент создан');
+      if (mounted) context.go('/patients/${result['id']}');
     } on DioException catch (e) {
       setState(() {
         _error = (e.response?.data is Map)
-            ? e.response!.data['message'] ?? 'Ошибка'
+            ? e.response!.data['message'] ?? 'Ошибка создания пациента'
             : 'Ошибка создания пациента';
       });
+    } catch (e) {
+      setState(() => _error = 'Ошибка создания пациента: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  String _composeFullName() => [
+        _lastNameCtrl.text.trim(),
+        _firstNameCtrl.text.trim(),
+        _patronymicCtrl.text.trim(),
+      ].where((s) => s.isNotEmpty).join(' ');
+
+  static String _doctorName(Map<String, dynamic> p) => [
+        p['last_name'],
+        p['first_name'],
+        p['patronymic'],
+      ].where((s) => s != null && (s as String).isNotEmpty).join(' ');
 
   @override
   Widget build(BuildContext context) {
@@ -95,27 +179,33 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
+                  key: const Key('field_last_name'),
                   controller: _lastNameCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Фамилия',
                     border: OutlineInputBorder(),
                   ),
+                  onChanged: (_) => _scheduleLoginGen(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  key: const Key('field_first_name'),
                   controller: _firstNameCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Имя',
                     border: OutlineInputBorder(),
                   ),
+                  onChanged: (_) => _scheduleLoginGen(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  key: const Key('field_patronymic'),
                   controller: _patronymicCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Отчество',
                     border: OutlineInputBorder(),
                   ),
+                  onChanged: (_) => _scheduleLoginGen(),
                 ),
                 const SizedBox(height: 12),
                 InkWell(
@@ -127,39 +217,84 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
                       suffixIcon: Icon(Icons.calendar_today),
                     ),
                     child: Text(
-                      _birthDate == null ? 'Не указана' : _formatDate(_birthDate!),
+                      _birthDate == null
+                          ? 'Не указана'
+                          : _formatDate(_birthDate!),
                     ),
                   ),
                 ),
                 const Divider(height: 32),
                 TextField(
+                  key: const Key('field_login'),
                   controller: _usernameCtrl,
-                  decoration: const InputDecoration(
+                  onChanged: (_) => _loginEdited = true,
+                  decoration: InputDecoration(
                     labelText: 'Логин',
-                    border: OutlineInputBorder(),
+                    helperText: 'Генерируется из ФИО, можно изменить',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _generatingLogin
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              height: 16, width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Сгенерировать логин',
+                            onPressed: () {
+                              _loginEdited = false;
+                              _generateLogin();
+                            },
+                          ),
                   ),
-                  onSubmitted: (_) => _submit(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  key: const Key('field_password'),
                   controller: _passwordCtrl,
-                  decoration: const InputDecoration(
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
                     labelText: 'Пароль',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.autorenew),
+                          tooltip: 'Сгенерировать пароль',
+                          onPressed: _regeneratePassword,
+                        ),
+                        IconButton(
+                          icon: Icon(_obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility),
+                          tooltip: _obscurePassword
+                              ? 'Показать пароль'
+                              : 'Скрыть пароль',
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                        ),
+                      ],
+                    ),
                   ),
-                  onSubmitted: (_) => _submit(),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(_error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
                 ],
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
+                    key: const Key('btn_create'),
                     onPressed: _loading ? null : _submit,
                     child: _loading
-                        ? const SizedBox(height: 20, width: 20,
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Создать пациента'),
                   ),

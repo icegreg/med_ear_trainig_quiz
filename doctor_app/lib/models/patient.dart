@@ -11,6 +11,7 @@ class Patient {
   final DateTime? birthDate;
   final int assignedCount;
   final int completedCount;
+  final int unreviewedCount;
   final DateTime createdAt;
 
   Patient({
@@ -26,6 +27,7 @@ class Patient {
     this.birthDate,
     this.assignedCount = 0,
     this.completedCount = 0,
+    this.unreviewedCount = 0,
     required this.createdAt,
   });
 
@@ -46,6 +48,7 @@ class Patient {
             : null,
         assignedCount: json['assigned_count'] ?? 0,
         completedCount: json['completed_count'] ?? 0,
+        unreviewedCount: json['unreviewed_count'] ?? 0,
         createdAt: DateTime.parse(json['created_at']),
       );
 }

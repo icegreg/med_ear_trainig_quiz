@@ -118,6 +118,40 @@ class ApiClient {
     return resp.data;
   }
 
+  /// Свободный логин по ФИО (генерация + проверка занятости на бэке).
+  Future<String> suggestLogin({
+    String lastName = '',
+    String firstName = '',
+    String patronymic = '',
+    DateTime? birthDate,
+  }) async {
+    final resp = await _dio.post('/doctors/patients/suggest-login', data: {
+      'last_name': lastName,
+      'first_name': firstName,
+      'patronymic': patronymic,
+      if (birthDate != null) 'birth_date': _dateToIso(birthDate),
+    });
+    return resp.data['login'] as String;
+  }
+
+  /// Отметить пройденные тесты пациента как просмотренные врачом.
+  Future<int> markResultsViewed(int patientId) async {
+    final resp = await _dio.post(
+      '/doctors/patients/$patientId/mark-results-viewed',
+    );
+    return (resp.data['reviewed'] as int?) ?? 0;
+  }
+
+  /// Сбросить пароль пациента на новый.
+  Future<Map<String, dynamic>> resetPassword(
+      int patientId, String newPassword) async {
+    final resp = await _dio.post(
+      '/doctors/patients/$patientId/reset-password',
+      data: {'new_password': newPassword},
+    );
+    return resp.data;
+  }
+
   Future<Map<String, dynamic>> setStartingSound(int patientId, int? audioFileId) async {
     final resp = await _dio.put(
       '/doctors/patients/$patientId/starting-sound',
