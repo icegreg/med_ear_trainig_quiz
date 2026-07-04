@@ -31,7 +31,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [storageProvider.overrideWithValue(storage)],
-          child: const HearingTestApp(),
+          child: const PatientApp(),
         ),
       );
       await tester.pumpAndSettle();
@@ -49,7 +49,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [storageProvider.overrideWithValue(storage)],
-          child: const HearingTestApp(),
+          child: const PatientApp(),
         ),
       );
       await tester.pumpAndSettle();
