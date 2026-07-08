@@ -61,7 +61,16 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-if DEBUG and not TESTING:
+# Django Debug Toolbar — грузится только когда DEBUG включён И явно разрешён
+# через ENABLE_DEBUG_TOOLBAR. По умолчанию выключен: на preprod DEBUG=True,
+# но тулбар там висеть не должен (см. Kaiten #67021277).
+ENABLE_DEBUG_TOOLBAR = (
+    DEBUG
+    and not TESTING
+    and os.environ.get('ENABLE_DEBUG_TOOLBAR', 'False').lower() in ('true', '1', 'yes')
+)
+
+if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append('debug_toolbar')
     MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 
@@ -146,7 +155,7 @@ STORAGES = {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
-if DEBUG:
+if ENABLE_DEBUG_TOOLBAR:
     DEBUG_TOOLBAR_CONFIG = {
         'SHOW_TOOLBAR_CALLBACK': lambda request: True,
     }
