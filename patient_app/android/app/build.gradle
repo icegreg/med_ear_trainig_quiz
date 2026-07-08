@@ -10,6 +10,11 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    // Нужно для BuildConfig.API_BASE_URL (AGP 8 по умолчанию выключает BuildConfig).
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -38,12 +43,38 @@ android {
         }
     }
 
-    // Имя итогового APK: patient_app-<versionName>+<versionCode>-<buildType>.apk
-    // Например: patient_app-0.6.0+2-release.apk
+    // Product flavors по окружению API (см. lib/core/constants.dart).
+    // Собирать: flutter build apk --flavor dev|preprod|prod
+    // Суффиксы applicationId позволяют держать dev/preprod/prod рядом на устройстве;
+    // prod идёт без суффикса — это боевой пакет.
+    flavorDimensions "env"
+    productFlavors {
+        dev {
+            dimension "env"
+            applicationIdSuffix ".dev"
+            resValue "string", "app_name", "MedEar Dev"
+            // 10.0.2.2 = хост-машина для Android-эмулятора
+            buildConfigField "String", "API_BASE_URL", '"http://10.0.2.2/api"'
+        }
+        preprod {
+            dimension "env"
+            applicationIdSuffix ".preprod"
+            resValue "string", "app_name", "MedEar Preprod"
+            buildConfigField "String", "API_BASE_URL", '"https://ear.dev.webprods.ru/api"'
+        }
+        prod {
+            dimension "env"
+            resValue "string", "app_name", "MedEar"
+            buildConfigField "String", "API_BASE_URL", '"https://api.medear.ru/api"'
+        }
+    }
+
+    // Имя итогового APK: patient_app-<flavor>-<versionName>+<versionCode>-<buildType>.apk
+    // Например: patient_app-prod-0.6.0+2-release.apk
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             output.outputFileName =
-                "patient_app-${variant.versionName}+${variant.versionCode}-${variant.buildType.name}.apk"
+                "patient_app-${variant.flavorName}-${variant.versionName}+${variant.versionCode}-${variant.buildType.name}.apk"
         }
     }
 }
