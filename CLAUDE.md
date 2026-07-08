@@ -12,6 +12,17 @@ Medical hearing test platform (платформа тестирования сл�
 | `server/` | Django Ninja + PostgreSQL | Backend + Admin |
 | `doctor_app/` | Flutter | Web |
 
+## Kaiten
+
+Задачи этого проекта живут в Kaiten:
+- Пространство: «Кабан», space_id = 809896
+  (вложено в «Первое пространство» → каталог «EAR MED»)
+- Основная доска задач: «Задачи»
+
+Когда я прошу «задачи», «что в работе», «бэклог» — бери карточки
+именно из space_id 809896. Не опрашивай другие пространства без явной просьбы.
+Для чтения используй инструменты kaiten (list_boards, list_cards, get_card).
+
 ## Build & Run
 
 ### Docker (рекомендуемый способ)
