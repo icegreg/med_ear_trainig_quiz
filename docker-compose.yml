@@ -74,6 +74,31 @@ services:
              flutter build web --base-href=/doctors/ --dart-define=FLAVOR=dev &&
              chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
 
+  # ─── Сборка пациентского APK (профиль "build") ─────────────────────────
+  # Собирает release-APK нужного flavor'а и кладёт его в media-том (staging),
+  # откуда web-сервис его регистрирует. Flavor задаётся APK_FLAVOR (по умолчанию
+  # preprod — под стенд). После сборки выполнить регистрацию:
+  #   docker compose exec web python manage.py register_release \
+  #     --apk /app/media/releases/incoming/app-<flavor>-release.apk \
+  #     --version-name <versionName> --version-code <versionCode> \
+  #     --commit $(git rev-parse HEAD) --set-default
+  apk-build:
+    profiles: ["build"]
+    image: instrumentisto/flutter:3.24
+    working_dir: /app
+    environment:
+      - APK_FLAVOR=${APK_FLAVOR:-preprod}
+    volumes:
+      - ./patient_app:/app
+      - flutter_pub_cache:/root/.pub-cache
+      - media_data:/out
+    command: >
+      sh -c "flutter pub get &&
+             flutter build apk --flavor $${APK_FLAVOR} --release &&
+             mkdir -p /out/releases/incoming &&
+             cp build/app/outputs/flutter-apk/app-$${APK_FLAVOR}-release.apk /out/releases/incoming/ &&
+             chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
+
 volumes:
   postgres_data:
   media_data:

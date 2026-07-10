@@ -9,6 +9,7 @@ from ninja import Query, Router
 from ..models import (
     AudioCategory,
     AudioFile,
+    Clinic,
     Doctor,
     Notification,
     Patient,
@@ -23,6 +24,7 @@ from ..schemas import (
     AudioCategorySchema,
     AudioCategoryTreeSchema,
     AudioFileSchema,
+    ClinicSchema,
     CreateCategorySchema,
     CreatePatientResponseSchema,
     CreatePatientSchema,
@@ -77,7 +79,7 @@ def list_doctors(request):
 def get_my_patients(request, search: str | None = None):
     """Список пациентов текущего врача. Поиск по фамилии/имени (icontains)."""
     from django.db.models import Count, Q
-    qs = request.doctor.patients.select_related('user', 'starting_sound')
+    qs = request.doctor.patients.select_related('user', 'starting_sound', 'clinic')
     if search:
         term = search.strip()
         if term:
@@ -125,6 +127,8 @@ def _patient_dict(p: Patient) -> dict:
         'id': p.id,
         'username': p.user.username,
         'doctor_id': p.doctor_id,
+        'clinic_id': p.clinic_id,
+        'clinic_name': p.clinic.name if p.clinic else None,
         'last_name': p.last_name,
         'first_name': p.first_name,
         'patronymic': p.patronymic,
@@ -139,11 +143,23 @@ def _patient_dict(p: Patient) -> dict:
     }
 
 
+@router.get('/clinics', response=list[ClinicSchema])
+def list_clinics(request):
+    """Список всех клиник (для селектора при заведении пациента)."""
+    return Clinic.objects.all()
+
+
 @router.post('/patients', response={200: CreatePatientResponseSchema, 400: ErrorSchema})
 def create_patient(request, payload: CreatePatientSchema):
     """Создать нового пациента и назначить текущему врачу."""
     if User.objects.filter(username=payload.username).exists():
         return 400, {'status': 'error', 'message': 'Пользователь с таким логином уже существует.'}
+
+    clinic = None
+    if payload.clinic_id is not None:
+        clinic = Clinic.objects.filter(id=payload.clinic_id).first()
+        if clinic is None:
+            return 400, {'status': 'error', 'message': 'Клиника не найдена.'}
 
     user = User.objects.create_user(
         username=payload.username,
@@ -152,6 +168,7 @@ def create_patient(request, payload: CreatePatientSchema):
     patient = Patient.objects.create(
         user=user,
         doctor=request.doctor,
+        clinic=clinic,
         last_name=payload.last_name,
         first_name=payload.first_name,
         patronymic=payload.patronymic,
@@ -162,16 +179,24 @@ def create_patient(request, payload: CreatePatientSchema):
 
 @router.post('/patients/suggest-login', response=LoginSuggestionSchema)
 def suggest_patient_login(request, payload: SuggestLoginSchema):
-    """Предложить свободный логин по ФИО (транслит фамилии + инициалы).
+    """Предложить свободный логин по ФИО.
 
-    Если базовый логин занят — суффикс из 2 цифр года рождения, затем
-    числовой автоинкремент.
+    Формат: ``аббревиатура_клиники-фамилияинициалы`` (напр. ``msk-ivanovps``);
+    при дубликате добавляется порядковый номер (``msk-ivanovps2``). Без клиники —
+    легаси-формат: ``фамилияинициалы`` + суффикс года рождения / автоинкремент.
     """
+    clinic_abbr = ''
+    if payload.clinic_id is not None:
+        clinic = Clinic.objects.filter(id=payload.clinic_id).first()
+        if clinic is not None:
+            clinic_abbr = clinic.abbreviation
+
     login = generate_patient_login(
         last_name=payload.last_name,
         first_name=payload.first_name,
         patronymic=payload.patronymic,
         birth_date=payload.birth_date,
+        clinic_abbr=clinic_abbr,
     )
     return {'login': login}
 

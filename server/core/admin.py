@@ -35,6 +35,7 @@ def _status_class(code):
 from .models import (
     AudioCategory,
     AudioFile,
+    Clinic,
     DeviceToken,
     Doctor,
     Notification,
@@ -43,6 +44,7 @@ from .models import (
     Quiz,
     QuizQuestion,
     QuizResult,
+    Release,
 )
 
 
@@ -266,15 +268,24 @@ class ReassignPatientsForm(forms.Form):
     )
 
 
+class TransferClinicForm(forms.Form):
+    """Промежуточная форма выбора клиники для массового переноса пациентов."""
+    clinic = forms.ModelChoiceField(
+        queryset=Clinic.objects.all(),
+        label='Клиника',
+        empty_label='— выберите клинику —',
+    )
+
+
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
-    list_display = ['full_name_display', 'user', 'doctor', 'birth_date', 'assigned_count', 'completed_count', 'logging_enabled', 'logs_link', 'created_at']
-    list_filter = ['doctor', 'logging_enabled']
+    list_display = ['full_name_display', 'user', 'doctor', 'clinic', 'birth_date', 'assigned_count', 'completed_count', 'logging_enabled', 'logs_link', 'created_at']
+    list_filter = ['doctor', 'clinic', 'logging_enabled']
     search_fields = ['last_name', 'first_name', 'patronymic', 'user__username']
     raw_id_fields = ['user', 'doctor', 'starting_sound']
     readonly_fields = ['logs_section']
     inlines = [AssignedQuizInline, CompletedQuizInline]
-    actions = ['reassign_to_doctor']
+    actions = ['reassign_to_doctor', 'transfer_to_clinic']
 
     @admin.action(description='Переназначить выбранных пациентов другому врачу')
     def reassign_to_doctor(self, request, queryset):
@@ -337,8 +348,45 @@ class PatientAdmin(admin.ModelAdmin):
             },
         )
 
+    @admin.action(description='Перенести выбранных пациентов в другую клинику')
+    def transfer_to_clinic(self, request, queryset):
+        """Массово перенести пациентов в выбранную клинику.
+
+        Показывает промежуточную страницу с выбором клиники; по подтверждению
+        обновляет привязку пациентов к клинике.
+        """
+        if 'apply' in request.POST:
+            form = TransferClinicForm(request.POST)
+            if form.is_valid():
+                target = form.cleaned_data['clinic']
+                moved = queryset.exclude(clinic=target).update(clinic=target)
+                skipped = queryset.filter(clinic=target).count()
+                msg = f'Перенесено пациентов в «{target}»: {moved}.'
+                if skipped:
+                    msg += f' Пропущено (уже в этой клинике): {skipped}.'
+                self.message_user(request, msg, messages.SUCCESS)
+                return None  # вернуться к списку
+
+            self.message_user(
+                request, 'Выберите клинику для переноса.', messages.ERROR
+            )
+
+        form = TransferClinicForm()
+        return render(
+            request,
+            'admin/core/patient/transfer_clinic.html',
+            {
+                **self.admin_site.each_context(request),
+                'title': 'Перенести пациентов в клинику',
+                'opts': self.model._meta,
+                'patients': queryset,
+                'form': form,
+                'action_checkbox_name': ACTION_CHECKBOX_NAME,
+            },
+        )
+
     def get_fields(self, request, obj=None):
-        base = ['user', 'doctor', 'last_name', 'first_name', 'patronymic',
+        base = ['user', 'doctor', 'clinic', 'last_name', 'first_name', 'patronymic',
                 'birth_date', 'starting_sound', 'logging_enabled']
         if obj:
             base.append('logs_section')
@@ -481,6 +529,24 @@ class PatientAdmin(admin.ModelAdmin):
         )
 
 
+# --- Clinic ---
+
+@admin.register(Clinic)
+class ClinicAdmin(admin.ModelAdmin):
+    list_display = ['name', 'abbreviation', 'address', 'patient_count', 'created_at']
+    search_fields = ['name', 'abbreviation', 'address']
+
+    def get_queryset(self, request):
+        from django.db.models import Count
+        return super().get_queryset(request).annotate(
+            _patient_count=Count('patients'),
+        )
+
+    @admin.display(description='Пациентов', ordering='_patient_count')
+    def patient_count(self, obj):
+        return obj._patient_count
+
+
 # --- AudioCategory ---
 
 @admin.register(AudioCategory)
@@ -589,3 +655,46 @@ class NotificationAdmin(admin.ModelAdmin):
     @admin.display(description='Сообщение')
     def message_short(self, obj):
         return obj.message[:80] + '...' if len(obj.message) > 80 else obj.message
+
+
+# --- Release (APK) ---
+
+@admin.register(Release)
+class ReleaseAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'is_default', 'size_display', 'commit_short', 'download_link', 'created_at']
+    list_filter = ['is_default']
+    search_fields = ['version_name', 'commit_sha']
+    readonly_fields = ['file_size', 'created_at', 'download_link']
+    actions = ['make_default']
+
+    @admin.display(description='Размер')
+    def size_display(self, obj):
+        return f'{obj.file_size / (1024 * 1024):.1f} МБ' if obj.file_size else '—'
+
+    @admin.display(description='Commit')
+    def commit_short(self, obj):
+        return obj.commit_sha[:8] if obj.commit_sha else '—'
+
+    @admin.display(description='Скачать')
+    def download_link(self, obj):
+        if not obj.apk:
+            return '—'
+        return format_html('<a href="{}" target="_blank">APK</a>', obj.apk.url)
+
+    def save_model(self, request, obj, form, change):
+        # Размер берём из загруженного файла, чтобы не заполнять руками.
+        if obj.apk and hasattr(obj.apk, 'size'):
+            try:
+                obj.file_size = obj.apk.size
+            except (OSError, ValueError):
+                pass
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description='Сделать дефолтным (выберите один релиз)')
+    def make_default(self, request, queryset):
+        if queryset.count() != 1:
+            messages.error(request, 'Выберите ровно один релиз для назначения дефолтным.')
+            return
+        release = queryset.first()
+        release.set_default()
+        messages.success(request, f'Дефолтный релиз: {release}')

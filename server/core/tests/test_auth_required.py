@@ -173,6 +173,10 @@ class AuthRequiredTest(TestCase):
         resp = self.client.get('/api/doctors/list')
         self.assertEqual(resp.status_code, 401)
 
+    def test_doctor_clinics_requires_auth(self):
+        resp = self.client.get('/api/doctors/clinics')
+        self.assertEqual(resp.status_code, 401)
+
     # --- Media ---
 
     def test_media_requires_auth(self):
@@ -238,6 +242,10 @@ class CrossAuthTest(APITestBase):
 
     def test_patient_token_rejected_by_doctor_list(self):
         resp = self.client.get('/api/doctors/list', **self.patient_headers())
+        self.assertEqual(resp.status_code, 401)
+
+    def test_patient_token_rejected_by_doctor_clinics(self):
+        resp = self.client.get('/api/doctors/clinics', **self.patient_headers())
         self.assertEqual(resp.status_code, 401)
 
     def test_patient_token_rejected_by_doctor_transfer(self):

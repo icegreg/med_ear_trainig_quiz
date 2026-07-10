@@ -113,6 +113,28 @@ python manage.py generate_test_data --output-dir /tmp
 ```
 Генерирует `doctors_credentials.csv` и `patients_credentials.csv` с логинами/паролями.
 
+### APK-релизы (дистрибуция пациентского приложения)
+Реестр релизов APK привязан к стенду (у preprod и prod свои БД — flavor
+константный, в модели `Release` не хранится). Все APK доступны **без пароля**.
+
+- **Скачивание** (публично, без auth):
+  - `GET /releases/latest.apk` — стабильная ссылка на дефолтный релиз
+    (nginx раздаёт напрямую локально; на стендах Coolify — Django `serve_release`).
+  - `GET /releases/<file>` — конкретный APK.
+  - `GET /api/releases/` — список релизов; `GET /api/releases/latest` — дефолтный.
+- **Админка**: раздел «Релизы APK» — список, загрузка, action «Сделать дефолтным»
+  (`Release.set_default()` снимает прежний дефолт и обновляет `latest.apk`).
+- **Сборка APK** (docker-композиция, профиль `build`):
+  ```bash
+  APK_FLAVOR=preprod docker compose --profile build run --rm apk-build
+  docker compose exec web python manage.py register_release \
+      --apk /app/media/releases/incoming/app-preprod-release.apk \
+      --version-name 0.6.0 --version-code 2 --commit $(git rev-parse HEAD) --set-default
+  ```
+- **Автосборка**: CI job `build-apk` собирает release-APK (preprod+prod) при
+  **push в main** и публикует артефактами; доставку на стенд (вызов
+  `register_release`) выполняет деплой стенда.
+
 ## Architecture
 
 ### Authentication — dual scheme

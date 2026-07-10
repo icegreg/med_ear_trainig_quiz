@@ -29,6 +29,11 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
   bool _obscurePassword = true;
   String? _error;
 
+  /// Клиники (для селектора) и выбранная клиника.
+  List<Map<String, dynamic>> _clinics = [];
+  int? _clinicId;
+  bool _loadingClinics = true;
+
   /// Врач вручную поправил логин — перестаём автогенерировать.
   bool _loginEdited = false;
   bool _generatingLogin = false;
@@ -38,6 +43,23 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
   void initState() {
     super.initState();
     _passwordCtrl.text = generatePassword();
+    _loadClinics();
+  }
+
+  Future<void> _loadClinics() async {
+    try {
+      final clinics = await ref.read(apiClientProvider).listClinics();
+      if (!mounted) return;
+      setState(() {
+        _clinics = clinics.cast<Map<String, dynamic>>();
+        if (_clinics.isNotEmpty) {
+          _clinicId = _clinics.first['id'] as int;
+        }
+        _loadingClinics = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingClinics = false);
+    }
   }
 
   @override
@@ -86,6 +108,7 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
             firstName: _firstNameCtrl.text.trim(),
             patronymic: _patronymicCtrl.text.trim(),
             birthDate: _birthDate,
+            clinicId: _clinicId,
           );
       if (!mounted || _loginEdited) return;
       _usernameCtrl.text = login;
@@ -117,6 +140,7 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
       final result = await api.createPatient(
         username,
         password,
+        clinicId: _clinicId,
         lastName: _lastNameCtrl.text.trim(),
         firstName: _firstNameCtrl.text.trim(),
         patronymic: _patronymicCtrl.text.trim(),
@@ -223,6 +247,33 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                if (_loadingClinics)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: LinearProgressIndicator(),
+                  )
+                else if (_clinics.isNotEmpty)
+                  DropdownButtonFormField<int>(
+                    key: const Key('field_clinic'),
+                    value: _clinicId,
+                    decoration: const InputDecoration(
+                      labelText: 'Клиника',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final c in _clinics)
+                        DropdownMenuItem<int>(
+                          value: c['id'] as int,
+                          child: Text('${c['name']} (${c['abbreviation']})'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _clinicId = value);
+                      // Префикс логина зависит от клиники — перегенерируем.
+                      if (!_loginEdited) _generateLogin();
+                    },
+                  ),
                 const Divider(height: 32),
                 TextField(
                   key: const Key('field_login'),

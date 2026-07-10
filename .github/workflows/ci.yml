@@ -89,3 +89,40 @@ jobs:
         run: |
           flutter pub get
           flutter analyze --no-fatal-infos
+
+  # Автосборка пациентского APK при мёрже в main (Kaiten #67040240).
+  # Не гейтит PR — только push в main. Артефакты забирает деплой стенда,
+  # который регистрирует их через `manage.py register_release`.
+  build-apk:
+    name: build-apk
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [preprod, prod]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.5
+          channel: stable
+          cache: true
+
+      - name: Build APK (${{ matrix.flavor }})
+        working-directory: patient_app
+        run: |
+          flutter pub get
+          flutter build apk --flavor ${{ matrix.flavor }} --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patient-apk-${{ matrix.flavor }}
+          path: patient_app/build/app/outputs/flutter-apk/app-${{ matrix.flavor }}-release.apk
+          if-no-files-found: error
