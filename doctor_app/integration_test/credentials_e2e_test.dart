@@ -25,11 +25,17 @@ class _FakeApi extends ApiClient {
   String? lastResetPassword;
 
   @override
+  Future<List<dynamic>> listClinics() async => [
+        {'id': 1, 'name': 'Клиника №1', 'abbreviation': 'CLN', 'address': ''},
+      ];
+
+  @override
   Future<String> suggestLogin({
     String lastName = '',
     String firstName = '',
     String patronymic = '',
     DateTime? birthDate,
+    int? clinicId,
   }) async {
     // Тот же формат, что и на бэке: транслит фамилии + инициалы.
     final map = {'Иванов': 'ivanov', 'Петров': 'petrov'};
@@ -48,6 +54,7 @@ class _FakeApi extends ApiClient {
   Future<Map<String, dynamic>> createPatient(
     String username,
     String password, {
+    int? clinicId,
     String lastName = '',
     String firstName = '',
     String patronymic = '',

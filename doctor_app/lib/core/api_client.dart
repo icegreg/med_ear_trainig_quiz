@@ -99,9 +99,16 @@ class ApiClient {
     return resp.data;
   }
 
+  /// Список клиник (для селектора при заведении пациента).
+  Future<List<dynamic>> listClinics() async {
+    final resp = await _dio.get('/doctors/clinics');
+    return resp.data;
+  }
+
   Future<Map<String, dynamic>> createPatient(
     String username,
     String password, {
+    int? clinicId,
     String lastName = '',
     String firstName = '',
     String patronymic = '',
@@ -110,6 +117,7 @@ class ApiClient {
     final resp = await _dio.post('/doctors/patients', data: {
       'username': username,
       'password': password,
+      if (clinicId != null) 'clinic_id': clinicId,
       'last_name': lastName,
       'first_name': firstName,
       'patronymic': patronymic,
@@ -119,17 +127,20 @@ class ApiClient {
   }
 
   /// Свободный логин по ФИО (генерация + проверка занятости на бэке).
+  /// С clinicId логин получает префикс аббревиатуры клиники.
   Future<String> suggestLogin({
     String lastName = '',
     String firstName = '',
     String patronymic = '',
     DateTime? birthDate,
+    int? clinicId,
   }) async {
     final resp = await _dio.post('/doctors/patients/suggest-login', data: {
       'last_name': lastName,
       'first_name': firstName,
       'patronymic': patronymic,
       if (birthDate != null) 'birth_date': _dateToIso(birthDate),
+      if (clinicId != null) 'clinic_id': clinicId,
     });
     return resp.data['login'] as String;
   }

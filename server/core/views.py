@@ -50,3 +50,21 @@ def serve_protected_media(request, path):
 
     content_type, _ = mimetypes.guess_type(str(file_path))
     return FileResponse(open(file_path, 'rb'), content_type=content_type)
+
+
+def serve_release(request, path):
+    """Публичная раздача APK-релизов — БЕЗ авторизации (Kaiten #67040240).
+
+    Файлы лежат в MEDIA_ROOT/releases/. Локально их обычно отдаёт nginx
+    напрямую; на стендах (Coolify, без nginx) — этот view через Django.
+    """
+    base = (Path(settings.MEDIA_ROOT) / 'releases').resolve()
+    file_path = (base / path).resolve()
+    if not file_path.is_file() or not file_path.is_relative_to(base):
+        return HttpResponseNotFound('Файл не найден.')
+
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    return FileResponse(
+        open(file_path, 'rb'),
+        content_type=content_type or 'application/vnd.android.package-archive',
+    )

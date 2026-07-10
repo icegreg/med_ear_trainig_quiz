@@ -23,12 +23,23 @@ class DoctorListSchema(Schema):
     clinic: str
 
 
+# --- Clinic ---
+
+class ClinicSchema(Schema):
+    id: int
+    name: str
+    abbreviation: str
+    address: str = ''
+
+
 # --- Patient ---
 
 class PatientSchema(Schema):
     id: int
     username: str
     doctor_id: UUID | None
+    clinic_id: int | None = None
+    clinic_name: str | None = None
     last_name: str = ''
     first_name: str = ''
     patronymic: str = ''
@@ -72,6 +83,7 @@ class ClientLogResponseSchema(Schema):
 class CreatePatientSchema(Schema):
     username: str
     password: str
+    clinic_id: int | None = None
     last_name: str = ''
     first_name: str = ''
     patronymic: str = ''
@@ -95,6 +107,7 @@ class SuggestLoginSchema(Schema):
     first_name: str = ''
     patronymic: str = ''
     birth_date: date | None = None
+    clinic_id: int | None = None
 
 
 class LoginSuggestionSchema(Schema):
@@ -287,6 +300,19 @@ class NotificationSchema(Schema):
 class NotificationsListSchema(Schema):
     notifications: list[NotificationSchema]
     unread_count: int
+
+
+# --- Releases (APK) ---
+
+class ReleaseSchema(Schema):
+    version_name: str
+    version_code: int
+    is_default: bool
+    file_size: int
+    commit_sha: str
+    notes: str
+    created_at: datetime
+    download_url: str
 
 
 # --- Errors ---

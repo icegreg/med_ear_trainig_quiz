@@ -1,9 +1,11 @@
+import os
 import secrets
+import shutil
 import uuid
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 # Срок жизни device token — 3 месяца.
@@ -114,6 +116,26 @@ class Doctor(models.Model):
         return ' '.join(parts)
 
 
+class Clinic(models.Model):
+    """Клиника (медцентр). К клинике привязываются пациенты."""
+    name = models.CharField('Название', max_length=255)
+    address = models.CharField('Адрес', max_length=500, blank=True)
+    abbreviation = models.CharField(
+        'Аббревиатура', max_length=10, unique=True,
+        help_text='Короткая латинская аббревиатура (по типу аэропортов), '
+                  'например MSK. Используется как префикс логина пациента.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Клиника'
+        verbose_name_plural = 'Клиники'
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.abbreviation})'
+
+
 class Patient(models.Model):
     """Профиль пациента, привязан к пользователю Django и врачу."""
     user = models.OneToOneField(
@@ -127,6 +149,14 @@ class Patient(models.Model):
         null=True,
         blank=True,
         related_name='patients',
+    )
+    clinic = models.ForeignKey(
+        'Clinic',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='patients',
+        verbose_name='Клиника',
     )
     starting_sound = models.ForeignKey(
         'AudioFile',
@@ -453,3 +483,84 @@ class Notification(models.Model):
     def __str__(self):
         status = '✓' if self.is_read else '●'
         return f'{status} {self.get_type_display()} — {self.doctor}'
+
+
+class Release(models.Model):
+    """Собранный APK пациентского приложения, доступный для скачивания.
+
+    Реестр привязан к стенду: на каждом хосте свой ENVIRONMENT (dev/preprod/prod),
+    поэтому flavor здесь всегда константный и в модели не хранится — при нужде
+    берётся из settings.ENVIRONMENT.
+    """
+
+    version_name = models.CharField('Версия', max_length=50)  # напр. 0.6.0
+    version_code = models.PositiveIntegerField('Номер сборки')  # напр. 2
+    apk = models.FileField('APK', upload_to='releases/')
+    file_size = models.PositiveBigIntegerField('Размер, байт', default=0)
+    commit_sha = models.CharField('Git commit', max_length=40, blank=True)
+    notes = models.TextField('Описание релиза', blank=True)
+    is_default = models.BooleanField('Дефолтный релиз', default=False)
+    created_at = models.DateTimeField('Собран', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Релиз APK'
+        verbose_name_plural = 'Релизы APK'
+        ordering = ['-created_at']
+        constraints = [
+            # версия уникальна в реестре стенда
+            models.UniqueConstraint(
+                fields=['version_name', 'version_code'],
+                name='uniq_release_version',
+            ),
+            # не более одного дефолтного релиза
+            models.UniqueConstraint(
+                fields=['is_default'],
+                condition=models.Q(is_default=True),
+                name='uniq_default_release',
+            ),
+        ]
+
+    # Стабильное имя файла дефолтного релиза (раздаётся nginx/Django напрямую).
+    LATEST_APK_NAME = 'latest.apk'
+
+    def __str__(self):
+        return f'{self.version_name}+{self.version_code}'
+
+    @property
+    def download_url(self):
+        """Публичная ссылка на скачивание этого APK (без авторизации)."""
+        if not self.apk:
+            return ''
+        return f'/releases/{os.path.basename(self.apk.name)}'
+
+    @classmethod
+    def latest_url(cls):
+        """Стабильная ссылка на дефолтный релиз."""
+        return f'/releases/{cls.LATEST_APK_NAME}'
+
+    def set_default(self):
+        """Сделать релиз дефолтным (снимает флаг с прежнего дефолта)."""
+        with transaction.atomic():
+            Release.objects.filter(is_default=True).exclude(pk=self.pk).update(
+                is_default=False
+            )
+            if not self.is_default:
+                self.is_default = True
+                self.save(update_fields=['is_default'])
+        self._sync_latest_apk()
+
+    def _sync_latest_apk(self):
+        """Скопировать дефолтный APK в стабильный путь releases/latest.apk.
+
+        Отдельный неизменный путь нужен, чтобы nginx (локально) и Django (на
+        стендах) отдавали «последний релиз» по постоянной ссылке.
+        """
+        if not self.apk:
+            return
+        releases_dir = os.path.join(settings.MEDIA_ROOT, 'releases')
+        os.makedirs(releases_dir, exist_ok=True)
+        latest = os.path.join(releases_dir, self.LATEST_APK_NAME)
+        tmp = f'{latest}.tmp'
+        with self.apk.open('rb') as src, open(tmp, 'wb') as dst:
+            shutil.copyfileobj(src, dst)
+        os.replace(tmp, latest)  # атомарная подмена
