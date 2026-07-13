@@ -1,7 +1,9 @@
+from datetime import date
 from uuid import UUID
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError
+from django.db.models import Max
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router
@@ -388,7 +390,7 @@ def get_result_breakdown(request, assignment_id: int):
 
 @router.get('/patients/{patient_id}/stats', response=PatientStatsSchema)
 def get_patient_stats(request, patient_id: int):
-    """Агрегированная статистика пациента: динамика, ошибки по звукам, приверженность."""
+    """Статистика пациента: динамика, ошибки по звукам, приверженность, активность."""
     patient = get_object_or_404(Patient, id=patient_id, doctor=request.doctor)
 
     results = list(
@@ -479,10 +481,30 @@ def get_patient_stats(request, patient_id: int):
         'avg_completion_days': round(sum(lags) / len(lags), 1) if lags else None,
     }
 
+    # Календарь: агрегируем по локальной дате сервера, иначе тест, сданный
+    # поздно вечером, «уезжает» в соседний день.
+    days: dict[date, int] = {}
+    for r in results:
+        day = timezone.localdate(r.submitted_at)
+        days[day] = days.get(day, 0) + 1
+
+    last_seen_at = patient.device_tokens.aggregate(
+        last=Max('last_used_at')
+    )['last']
+
+    activity = {
+        'days': [
+            {'date': day, 'quizzes': count}
+            for day, count in sorted(days.items())
+        ],
+        'last_seen_at': last_seen_at,
+    }
+
     return {
         'dynamics': dynamics,
         'sound_errors': sound_errors,
         'adherence': adherence,
+        'activity': activity,
     }
 
 
