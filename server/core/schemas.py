@@ -269,6 +269,34 @@ class QuizResultSchema(Schema):
     submitted_at: datetime
 
 
+# --- Разбор результата по вопросам ---
+
+class BreakdownItemSchema(Schema):
+    """Одна строка разбора — вопрос, что ответил пациент и что было верно."""
+    question_id: int
+    order: int
+    text: str
+    audio_id: int | None
+    audio_title: str | None
+    audio_url: str | None
+    audio_is_deleted: bool = False
+    patient_answer: str
+    correct_answer: str | None
+    # None — вопрос удалён из квиза, правильный ответ неизвестен.
+    is_correct: bool | None
+    question_deleted: bool = False
+
+
+class ResultBreakdownSchema(Schema):
+    assignment_id: int
+    quiz_title: str
+    submitted_at: datetime
+    score: int
+    total: int
+    percent: float
+    questions: list[BreakdownItemSchema]
+
+
 # --- Patient stats (карточка пациента у врача) ---
 
 class StatsPointSchema(Schema):

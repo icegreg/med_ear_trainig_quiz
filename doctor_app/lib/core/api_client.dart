@@ -224,6 +224,11 @@ class ApiClient {
     return resp.data;
   }
 
+  Future<Map<String, dynamic>> getResultBreakdown(int assignmentId) async {
+    final resp = await _dio.get('/doctors/results/$assignmentId');
+    return resp.data;
+  }
+
   Future<Map<String, dynamic>> assignQuiz(
     int patientId,
     int quizId, {

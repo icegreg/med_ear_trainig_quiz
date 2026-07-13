@@ -43,6 +43,7 @@ from ..schemas import (
     QuizSummarySchema,
     QuizWithAudioSchema,
     RenameCategorySchema,
+    ResultBreakdownSchema,
     ResetPasswordResponseSchema,
     ResetPasswordSchema,
     SetStartingSoundSchema,
@@ -308,6 +309,80 @@ def get_patient_results(request, patient_id: int):
         }
         for r in results
     ]
+
+
+@router.get(
+    '/results/{assignment_id}',
+    response={200: ResultBreakdownSchema, 404: ErrorSchema},
+)
+def get_result_breakdown(request, assignment_id: int):
+    """Разбор пройденного теста по вопросам: что спросили, что ответил пациент,
+    что было верно."""
+    result = get_object_or_404(
+        QuizResult.objects.select_related('assignment__quiz'),
+        assignment_id=assignment_id,
+        assignment__patient__doctor=request.doctor,
+    )
+
+    answers = [a for a in result.answers if isinstance(a, dict)]
+    questions = {
+        q.id: q
+        for q in QuizQuestion.objects.filter(
+            id__in=[a.get('question_id') for a in answers]
+        ).select_related('audio_file')
+    }
+
+    items = []
+    for a in answers:
+        question = questions.get(a.get('question_id'))
+        patient_answer = str(a.get('answer', ''))
+        if question is None:
+            # Вопрос удалён из квиза: ответ пациента сохраняем, но сверить
+            # его не с чем. Строку всё равно показываем — она часть теста.
+            items.append({
+                'question_id': a.get('question_id') or 0,
+                # Удалённые вопросы — в конец списка.
+                'order': 10**6,
+                'text': 'Вопрос удалён из теста',
+                'audio_id': None,
+                'audio_title': None,
+                'audio_url': None,
+                'audio_is_deleted': False,
+                'patient_answer': patient_answer,
+                'correct_answer': None,
+                'is_correct': None,
+                'question_deleted': True,
+            })
+            continue
+
+        audio = question.audio_file  # NULL (SET_NULL) или soft-deleted — не падаем
+        items.append({
+            'question_id': question.id,
+            'order': question.order,
+            'text': question.text,
+            'audio_id': audio.id if audio else None,
+            'audio_title': audio.title if audio else None,
+            'audio_url': audio.file.url if audio and audio.file else None,
+            'audio_is_deleted': bool(audio and audio.is_deleted),
+            'patient_answer': patient_answer,
+            'correct_answer': question.correct_answer,
+            'is_correct': patient_answer == question.correct_answer,
+            'question_deleted': False,
+        })
+
+    items.sort(key=lambda i: i['order'])
+    total = len(items)
+    score = result.score or 0
+
+    return 200, {
+        'assignment_id': result.assignment_id,
+        'quiz_title': result.assignment.quiz.title,
+        'submitted_at': result.submitted_at,
+        'score': score,
+        'total': total,
+        'percent': round(score / total * 100, 1) if total else 0.0,
+        'questions': items,
+    }
 
 
 @router.get('/patients/{patient_id}/stats', response=PatientStatsSchema)
