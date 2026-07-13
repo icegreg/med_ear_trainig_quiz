@@ -3,10 +3,12 @@ from datetime import timedelta
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from core.models import (
     AudioCategory,
     AudioFile,
+    DeviceToken,
     PatientQuizAssignment,
     Quiz,
     QuizQuestion,
@@ -221,6 +223,56 @@ class PatientStatsTest(APITestBase):
         self.assertEqual(adherence['assigned'], 3)
         self.assertEqual(adherence['completion_lag_days'], [10])
         self.assertEqual(adherence['avg_completion_days'], 10.0)
+
+    # --- Календарь активности ---
+
+    def test_activity_empty_for_patient_without_results(self):
+        data = self.client.get(self.url(), **self.doctor_headers()).json()
+        self.assertEqual(data['activity']['days'], [])
+
+    def test_activity_groups_results_by_local_date(self):
+        # Один квиз на пациента можно пройти лишь раз — три теста, три квиза.
+        def pass_quiz(title):
+            quiz, questions = self._quiz_with_questions(title, [(self.audio, 'да')])
+            return self._complete(
+                quiz, [{'question_id': questions[0].id, 'answer': 'да'}]
+            )
+
+        pass_quiz('Квиз 1')
+        pass_quiz('Квиз 2')
+        # Третий тест сдан неделей раньше — отдельный день календаря.
+        old = pass_quiz('Квиз 3')
+        week_ago = timezone.now() - timedelta(days=7)
+        QuizResult.objects.filter(assignment=old).update(submitted_at=week_ago)
+
+        data = self.client.get(self.url(), **self.doctor_headers()).json()
+        days = data['activity']['days']
+        self.assertEqual(len(days), 2)
+        # Хронологический порядок: сначала старый день.
+        self.assertEqual(days[0]['date'], str(timezone.localdate(week_ago)))
+        self.assertEqual(days[0]['quizzes'], 1)
+        self.assertEqual(days[1]['date'], str(timezone.localdate()))
+        self.assertEqual(days[1]['quizzes'], 2)
+
+    def test_last_seen_at_is_null_without_tokens(self):
+        self.patient.device_tokens.all().delete()
+        data = self.client.get(self.url(), **self.doctor_headers()).json()
+        self.assertIsNone(data['activity']['last_seen_at'])
+
+    def test_last_seen_at_is_max_across_devices(self):
+        # Микросекунды режем: в JSON время сериализуется до миллисекунд.
+        now = timezone.now().replace(microsecond=0)
+        DeviceToken.objects.create(
+            patient=self.patient, last_used_at=now - timedelta(days=3),
+        )
+        recent = DeviceToken.objects.create(
+            patient=self.patient, last_used_at=now - timedelta(hours=1),
+        )
+        data = self.client.get(self.url(), **self.doctor_headers()).json()
+        self.assertEqual(
+            parse_datetime(data['activity']['last_seen_at']),
+            recent.last_used_at,
+        )
 
     # --- Доступ ---
 

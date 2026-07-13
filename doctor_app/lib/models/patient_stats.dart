@@ -3,11 +3,13 @@ class PatientStats {
   final List<StatsPoint> dynamics;
   final List<SoundError> soundErrors;
   final Adherence adherence;
+  final Activity activity;
 
   PatientStats({
     required this.dynamics,
     required this.soundErrors,
     required this.adherence,
+    required this.activity,
   });
 
   bool get isEmpty => dynamics.isEmpty && soundErrors.isEmpty;
@@ -20,6 +22,7 @@ class PatientStats {
             .map((e) => SoundError.fromJson(e))
             .toList(),
         adherence: Adherence.fromJson(json['adherence'] ?? const {}),
+        activity: Activity.fromJson(json['activity'] ?? const {}),
       );
 }
 
@@ -79,6 +82,44 @@ class SoundError {
         errors: json['errors'] ?? 0,
         errorPercent: (json['error_percent'] ?? 0).toDouble(),
         isDeleted: json['is_deleted'] ?? false,
+      );
+}
+
+/// Календарь активности: дни, когда пациент сдавал тесты, и последний вход.
+class Activity {
+  final List<ActivityDay> days;
+
+  /// Последний выход приложения на сервер. История заходов не хранится —
+  /// на сервере это одна отметка на устройство, поэтому только дата.
+  final DateTime? lastSeenAt;
+
+  Activity({required this.days, this.lastSeenAt});
+
+  /// Тесты по дате (локальной дате сервера) — для быстрого поиска в heatmap.
+  Map<DateTime, int> get byDate => {
+        for (final d in days) d.date: d.quizzes,
+      };
+
+  factory Activity.fromJson(Map<String, dynamic> json) => Activity(
+        days: (json['days'] as List? ?? [])
+            .map((e) => ActivityDay.fromJson(e))
+            .toList(),
+        lastSeenAt: json['last_seen_at'] == null
+            ? null
+            : DateTime.parse(json['last_seen_at']),
+      );
+}
+
+/// Один день календаря: сколько тестов сдано.
+class ActivityDay {
+  final DateTime date;
+  final int quizzes;
+
+  ActivityDay({required this.date, required this.quizzes});
+
+  factory ActivityDay.fromJson(Map<String, dynamic> json) => ActivityDay(
+        date: DateTime.parse(json['date']),
+        quizzes: json['quizzes'] ?? 0,
       );
 }
 

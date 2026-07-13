@@ -1,5 +1,5 @@
-// E2E (real Chrome): блок статистики на карточке пациента — приверженность,
-// динамика результатов, ошибки по звукам.
+// E2E (real Chrome): блок статистики на карточке пациента — календарь
+// активности, приверженность, динамика результатов, ошибки по звукам.
 //   flutter test integration_test/stats_e2e_test.dart --device-id chrome
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -101,6 +101,14 @@ Map<String, dynamic> _statsFixture() => {
         'completion_lag_days': [3, 5],
         'avg_completion_days': 4.0,
       },
+      'activity': {
+        // Даты — относительно сегодня, иначе они уедут из окна календаря.
+        'days': [
+          {'date': _isoDate(_ago(30)), 'quizzes': 1},
+          {'date': _isoDate(_ago(0)), 'quizzes': 2},
+        ],
+        'last_seen_at': _ago(1).toUtc().toIso8601String(),
+      },
     };
 
 Map<String, dynamic> _emptyStats() => {
@@ -114,7 +122,18 @@ Map<String, dynamic> _emptyStats() => {
         'completion_lag_days': [],
         'avg_completion_days': null,
       },
+      'activity': {'days': [], 'last_seen_at': null},
     };
+
+DateTime _ago(int days) =>
+    DateUtils.dateOnly(DateTime.now()).subtract(Duration(days: days));
+
+String _isoDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+String _humanDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}.'
+    '${d.month.toString().padLeft(2, '0')}.${d.year}';
 
 Future<void> _pumpFor(WidgetTester t, [int ms = 1200]) async {
   for (var i = 0; i < ms ~/ 100; i++) {
@@ -141,7 +160,11 @@ void main() {
     final fake = _FakeApi(storage, stats: _statsFixture());
     await tester.pumpWidget(_app(
       fake,
-      const Scaffold(body: PatientStatsSection(patientId: 1)),
+      const Scaffold(
+        body: SingleChildScrollView(
+          child: PatientStatsSection(patientId: 1),
+        ),
+      ),
     ));
     await _pumpFor(tester);
 
@@ -167,6 +190,38 @@ void main() {
     debugPrint('E2E patient stats OK');
   });
 
+  testWidgets('activity calendar marks days with quizzes and last login',
+      (tester) async {
+    final fake = _FakeApi(storage, stats: _statsFixture());
+    await tester.pumpWidget(_app(
+      fake,
+      const Scaffold(
+        body: SingleChildScrollView(
+          child: PatientStatsSection(patientId: 1),
+        ),
+      ),
+    ));
+    await _pumpFor(tester);
+
+    expect(find.byKey(const Key('stats_activity')), findsOneWidget);
+    // Ячейки дней подписаны тултипом — и заполненные, и пустые.
+    expect(
+      find.byTooltip('${_humanDate(_ago(0))} — 2 теста'),
+      findsOneWidget,
+    );
+    expect(
+      find.byTooltip('${_humanDate(_ago(30))} — 1 тест'),
+      findsOneWidget,
+    );
+    expect(
+      find.byTooltip('${_humanDate(_ago(29))} — тестов не было'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Последний вход:'), findsOneWidget);
+
+    debugPrint('E2E activity calendar OK');
+  });
+
   testWidgets('single result renders a hero number instead of a chart',
       (tester) async {
     final stats = _statsFixture();
@@ -174,7 +229,11 @@ void main() {
     final fake = _FakeApi(storage, stats: stats);
     await tester.pumpWidget(_app(
       fake,
-      const Scaffold(body: PatientStatsSection(patientId: 1)),
+      const Scaffold(
+        body: SingleChildScrollView(
+          child: PatientStatsSection(patientId: 1),
+        ),
+      ),
     ));
     await _pumpFor(tester);
 
@@ -190,13 +249,23 @@ void main() {
     final fake = _FakeApi(storage, stats: _emptyStats());
     await tester.pumpWidget(_app(
       fake,
-      const Scaffold(body: PatientStatsSection(patientId: 1)),
+      const Scaffold(
+        body: SingleChildScrollView(
+          child: PatientStatsSection(patientId: 1),
+        ),
+      ),
     ));
     await _pumpFor(tester);
 
     expect(find.text('Пациент ещё не прошёл ни одного теста'), findsOneWidget);
     expect(find.textContaining('Нет данных'), findsWidgets);
     expect(find.textContaining('Ошибка'), findsNothing);
+    // Пустой календарь — это пустая сетка, а не отсутствие блока.
+    expect(find.byKey(const Key('stats_activity')), findsOneWidget);
+    expect(
+      find.text('Приложение ещё ни разу не выходило на связь'),
+      findsOneWidget,
+    );
 
     debugPrint('E2E empty stats OK');
   });
