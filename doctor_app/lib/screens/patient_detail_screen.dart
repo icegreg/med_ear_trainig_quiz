@@ -10,6 +10,7 @@ import '../core/password_gen.dart';
 import '../core/web_audio_player.dart';
 import '../widgets/credentials_card.dart';
 import '../widgets/patient_stats_section.dart';
+import '../widgets/result_breakdown_view.dart';
 
 import '../models/assignment.dart';
 import '../models/doctor.dart';
@@ -26,19 +27,6 @@ String _doctorNameFrom(Map<String, dynamic> p) => [
       p['first_name'],
       p['patronymic'],
     ].where((s) => s != null && (s as String).isNotEmpty).join(' ');
-
-/// Ответы пациента хранятся как «да»/«нет», но врачу показываем «Слышу»/«Не слышу».
-String _answerLabel(dynamic raw) {
-  final v = raw?.toString().trim().toLowerCase();
-  switch (v) {
-    case 'да':
-      return 'Слышу';
-    case 'нет':
-      return 'Не слышу';
-    default:
-      return raw?.toString() ?? '';
-  }
-}
 
 final _assignmentsProvider =
     FutureProvider.family<List<Assignment>, int>((ref, patientId) async {
@@ -297,6 +285,7 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
                         return Column(
                           children: [
                             ...results.map((r) => Card(
+                                  clipBehavior: Clip.antiAlias,
                                   child: ExpansionTile(
                                     title: Row(
                                       children: [
@@ -308,15 +297,14 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
                                     ),
                                     subtitle: Text(
                                         'Баллы: ${r.score ?? '-'} | ${r.submittedAt.toLocal().toString().substring(0, 16)}'),
-                                    children: r.answers
-                                        .map<Widget>((a) => ListTile(
-                                              dense: true,
-                                              title: Text(
-                                                  'Вопрос ${a['question_id']}'),
-                                              trailing: Text(
-                                                  _answerLabel(a['answer'])),
-                                            ))
-                                        .toList(),
+                                    childrenPadding:
+                                        const EdgeInsets.fromLTRB(16, 0, 8, 12),
+                                    // Разбор грузится только когда врач раскрыл
+                                    // результат — не тянем его для всех тестов.
+                                    children: [
+                                      ResultBreakdownView(
+                                          assignmentId: r.assignmentId),
+                                    ],
                                   ),
                                 )),
                             ...expired.map((a) => Card(
