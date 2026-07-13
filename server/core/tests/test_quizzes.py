@@ -1,7 +1,46 @@
 """Тесты API квизов."""
 import json
 
+from django.core.exceptions import ValidationError
+
+from core.models import Quiz, QuizQuestion
+
 from .helpers import APITestBase
+
+
+class QuestionDefaultAnswerTest(APITestBase):
+    """Правильный ответ по умолчанию — «слышу» (да)."""
+
+    def test_correct_answer_defaults_to_yes(self):
+        quiz = Quiz.objects.create(title='Тест')
+        question = QuizQuestion.objects.create(
+            quiz=quiz, audio_file=self.audio, text='Слышите звук?',
+        )
+        question.refresh_from_db()
+        self.assertEqual(question.correct_answer, QuizQuestion.Answer.YES)
+        self.assertEqual(question.correct_answer, 'да')
+        # Варианты ответа дефолтятся согласованно с правильным.
+        self.assertEqual(question.options, ['да', 'нет'])
+
+    def test_correct_answer_can_be_set_to_no(self):
+        """Дефолт — не запрет: «не слышу» тоже валидный правильный ответ."""
+        quiz = Quiz.objects.create(title='Тест на тишину')
+        question = QuizQuestion.objects.create(
+            quiz=quiz, audio_file=self.audio, text='Слышите звук?',
+            correct_answer=QuizQuestion.Answer.NO,
+        )
+        question.full_clean()
+        self.assertEqual(question.correct_answer, 'нет')
+
+    def test_answer_outside_choices_is_invalid(self):
+        """Опечатка вроде «Да» больше не пройдёт валидацию (админка, формы)."""
+        quiz = Quiz.objects.create(title='Тест')
+        question = QuizQuestion(
+            quiz=quiz, audio_file=self.audio, text='Слышите звук?',
+            correct_answer='Да',
+        )
+        with self.assertRaises(ValidationError):
+            question.full_clean()
 
 
 class QuizDetailTest(APITestBase):
