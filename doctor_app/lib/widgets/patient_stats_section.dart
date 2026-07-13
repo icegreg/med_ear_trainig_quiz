@@ -13,6 +13,14 @@ final patientStatsProvider =
 });
 
 final _dayFormat = DateFormat('dd.MM');
+final _dateFormat = DateFormat('dd.MM.yyyy');
+final _dateTimeFormat = DateFormat('dd.MM.yyyy, HH:mm');
+
+/// Русская локаль intl в приложении не инициализирована — свои сокращения.
+const _monthNames = [
+  'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+  'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+];
 
 /// Блок статистики на карточке пациента: динамика, ошибки по звукам,
 /// приверженность.
@@ -30,6 +38,9 @@ class PatientStatsSection extends ConsumerWidget {
       data: (stats) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Календарь первым: «заходит ли он вообще» — вопрос до результатов.
+          _ActivityCard(activity: stats.activity),
+          const SizedBox(height: 16),
           _AdherenceCard(adherence: stats.adherence),
           const SizedBox(height: 16),
           _DynamicsCard(points: stats.dynamics),
@@ -37,6 +48,223 @@ class PatientStatsSection extends ConsumerWidget {
           _SoundErrorsCard(sounds: stats.soundErrors),
         ],
       ),
+    );
+  }
+}
+
+// ─── Календарь активности ────────────────────────────────────────────────
+
+/// Сколько недель показываем. Полгода — видно и регулярность, и провалы,
+/// и при этом сетка влезает на экран без прокрутки на типичном мониторе.
+const _weeksShown = 26;
+const _cellSize = 13.0;
+const _cellGap = 3.0;
+
+/// Heatmap прохождений: недели по горизонтали, дни недели по вертикали.
+class _ActivityCard extends StatelessWidget {
+  final Activity activity;
+  const _ActivityCard({required this.activity});
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = activity.byDate;
+    // Сетка заканчивается текущей неделей; отсчитываем назад до понедельника.
+    final today = DateUtils.dateOnly(DateTime.now());
+    final lastMonday = today.subtract(Duration(days: today.weekday - 1));
+    final firstMonday =
+        lastMonday.subtract(const Duration(days: 7 * (_weeksShown - 1)));
+
+    return Card(
+      key: const Key('stats_activity'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Активность', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text('Пройденные тесты за последние полгода',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _MonthLabels(firstMonday: firstMonday),
+                  const SizedBox(height: 4),
+                  _Heatmap(
+                    firstMonday: firstMonday,
+                    today: today,
+                    counts: counts,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _HeatmapLegend(),
+            const SizedBox(height: 12),
+            Text(
+              activity.lastSeenAt == null
+                  ? 'Приложение ещё ни разу не выходило на связь'
+                  : 'Последний вход: '
+                      '${_dateTimeFormat.format(activity.lastSeenAt!.toLocal())}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Heatmap extends StatelessWidget {
+  final DateTime firstMonday;
+  final DateTime today;
+  final Map<DateTime, int> counts;
+
+  const _Heatmap({
+    required this.firstMonday,
+    required this.today,
+    required this.counts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var week = 0; week < _weeksShown; week++)
+          Padding(
+            padding: const EdgeInsets.only(right: _cellGap),
+            child: Column(
+              children: [
+                for (var day = 0; day < 7; day++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: _cellGap),
+                    child: _DayCell(
+                      date: firstMonday.add(Duration(days: week * 7 + day)),
+                      today: today,
+                      counts: counts,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DayCell extends StatelessWidget {
+  final DateTime date;
+  final DateTime today;
+  final Map<DateTime, int> counts;
+
+  const _DayCell({
+    required this.date,
+    required this.today,
+    required this.counts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Дни после сегодняшнего в текущей неделе — не данные, а пустое место.
+    if (date.isAfter(today)) {
+      return const SizedBox(width: _cellSize, height: _cellSize);
+    }
+    final quizzes = counts[date] ?? 0;
+    return Tooltip(
+      message: '${_dateFormat.format(date)} — ${_quizzesWord(quizzes)}',
+      child: Container(
+        width: _cellSize,
+        height: _cellSize,
+        decoration: BoxDecoration(
+          color: _cellColor(Theme.of(context).colorScheme, quizzes),
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+    );
+  }
+}
+
+/// Последовательная шкала: один цвет, светлее → темнее. Ноль — нейтральная
+/// поверхность, а не бледный оттенок цвета: «не заходил» это не «мало».
+Color _cellColor(ColorScheme scheme, int quizzes) {
+  if (quizzes <= 0) return scheme.surfaceContainerHighest;
+  if (quizzes == 1) return scheme.primary.withOpacity(0.35);
+  if (quizzes == 2) return scheme.primary.withOpacity(0.65);
+  return scheme.primary;
+}
+
+String _quizzesWord(int n) {
+  if (n == 0) return 'тестов не было';
+  final word = (n % 10 == 1 && n % 100 != 11)
+      ? 'тест'
+      : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20))
+          ? 'теста'
+          : 'тестов';
+  return '$n $word';
+}
+
+class _MonthLabels extends StatelessWidget {
+  final DateTime firstMonday;
+  const _MonthLabels({required this.firstMonday});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    var previousMonth = -1;
+
+    return Row(
+      children: [
+        for (var week = 0; week < _weeksShown; week++)
+          Builder(builder: (_) {
+            final monday = firstMonday.add(Duration(days: week * 7));
+            // Подпись — только на первой неделе месяца, иначе они сольются.
+            final isNewMonth = monday.month != previousMonth;
+            previousMonth = monday.month;
+            return SizedBox(
+              width: _cellSize + _cellGap,
+              child: isNewMonth
+                  ? Text(
+                      _monthNames[monday.month - 1],
+                      style: style,
+                      softWrap: false,
+                      overflow: TextOverflow.visible,
+                    )
+                  : const SizedBox.shrink(),
+            );
+          }),
+      ],
+    );
+  }
+}
+
+class _HeatmapLegend extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.bodySmall;
+    return Row(
+      children: [
+        Text('меньше', style: style),
+        const SizedBox(width: 6),
+        for (final quizzes in [0, 1, 2, 3])
+          Padding(
+            padding: const EdgeInsets.only(right: _cellGap),
+            child: Container(
+              width: _cellSize,
+              height: _cellSize,
+              decoration: BoxDecoration(
+                color: _cellColor(scheme, quizzes),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+        const SizedBox(width: 3),
+        Text('больше', style: style),
+      ],
     );
   }
 }

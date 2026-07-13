@@ -330,10 +330,27 @@ class AdherenceSchema(Schema):
     avg_completion_days: float | None
 
 
+class ActivityDaySchema(Schema):
+    """Один день календаря активности: сколько тестов сдано."""
+    date: date
+    quizzes: int
+
+
+class ActivitySchema(Schema):
+    """Календарь активности: дни с пройденными тестами и последний вход.
+
+    last_seen_at — максимум по DeviceToken.last_used_at. Это одна отметка на
+    токен, а не история заходов, поэтому в календарь она не попадает.
+    """
+    days: list[ActivityDaySchema]
+    last_seen_at: datetime | None
+
+
 class PatientStatsSchema(Schema):
     dynamics: list[StatsPointSchema]
     sound_errors: list[SoundErrorSchema]
     adherence: AdherenceSchema
+    activity: ActivitySchema
 
 
 class ResultConfirmationSchema(Schema):
