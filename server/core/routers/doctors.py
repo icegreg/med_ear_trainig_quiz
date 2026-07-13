@@ -38,6 +38,7 @@ from ..schemas import (
     NotificationsListSchema,
     NotificationSchema,
     PatientSchema,
+    PatientStatsSchema,
     QuizResultSchema,
     QuizSummarySchema,
     QuizWithAudioSchema,
@@ -307,6 +308,106 @@ def get_patient_results(request, patient_id: int):
         }
         for r in results
     ]
+
+
+@router.get('/patients/{patient_id}/stats', response=PatientStatsSchema)
+def get_patient_stats(request, patient_id: int):
+    """Агрегированная статистика пациента: динамика, ошибки по звукам, приверженность."""
+    patient = get_object_or_404(Patient, id=patient_id, doctor=request.doctor)
+
+    results = list(
+        QuizResult.objects.filter(assignment__patient=patient)
+        .select_related('assignment__quiz')
+        .order_by('submitted_at')
+    )
+
+    # Тексты/правильные ответы вопросов, реально встреченных в ответах.
+    question_ids = {
+        a.get('question_id')
+        for r in results
+        for a in r.answers
+        if isinstance(a, dict)
+    }
+    questions = {
+        q.id: q
+        for q in QuizQuestion.objects.filter(id__in=question_ids)
+        .select_related('audio_file__category')
+    }
+
+    dynamics = []
+    # audio_id -> [answered, errors, title, category, is_deleted]
+    sounds: dict[int | None, dict] = {}
+
+    for r in results:
+        answers = [a for a in r.answers if isinstance(a, dict)]
+        # Длина ответов — это число вопросов на момент сдачи (submit требует
+        # ответа на все). Вопросы квиза могли измениться позже, поэтому берём
+        # исторический снимок, а не текущий questions.count().
+        total = len(answers) or r.assignment.quiz.questions.count()
+        score = r.score or 0
+        dynamics.append({
+            'assignment_id': r.assignment_id,
+            'quiz_title': r.assignment.quiz.title,
+            'score': score,
+            'total': total,
+            'percent': round(score / total * 100, 1) if total else 0.0,
+            'submitted_at': r.submitted_at,
+        })
+
+        for a in answers:
+            question = questions.get(a.get('question_id'))
+            if question is None:
+                # Вопрос удалён из квиза — правильный ответ неизвестен, пропускаем.
+                continue
+            audio = question.audio_file  # может быть NULL (SET_NULL) или soft-deleted
+            key = audio.id if audio else None
+            bucket = sounds.setdefault(key, {
+                'audio_id': key,
+                'title': audio.title if audio else 'Без звука',
+                'category': audio.category.name if audio and audio.category else None,
+                'is_deleted': bool(audio and audio.is_deleted),
+                'answered': 0,
+                'errors': 0,
+            })
+            bucket['answered'] += 1
+            if a.get('answer') != question.correct_answer:
+                bucket['errors'] += 1
+
+    sound_errors = [
+        {**b, 'error_percent': round(b['errors'] / b['answered'] * 100, 1)}
+        for b in sounds.values()
+        if b['answered']
+    ]
+    # Сначала самые проблемные звуки — врач смотрит сверху вниз.
+    sound_errors.sort(key=lambda b: (-b['error_percent'], -b['answered'], b['title']))
+
+    assignments = list(patient.quiz_assignments.all())
+    lags = [
+        (a.completed_at - a.assigned_at).days
+        for a in assignments
+        if a.status == PatientQuizAssignment.Status.COMPLETED
+        and a.completed_at and a.assigned_at
+    ]
+    adherence = {
+        'assigned': sum(
+            1 for a in assignments
+            if a.status == PatientQuizAssignment.Status.ASSIGNED
+        ),
+        'completed': sum(
+            1 for a in assignments
+            if a.status == PatientQuizAssignment.Status.COMPLETED
+        ),
+        'expired': sum(1 for a in assignments if a.is_expired),
+        'upcoming': sum(1 for a in assignments if a.is_upcoming),
+        'completion_lag_days': lags,
+        'avg_completion_days': round(sum(lags) / len(lags), 1) if lags else None,
+    }
+
+    return {
+        'dynamics': dynamics,
+        'sound_errors': sound_errors,
+        'adherence': adherence,
+    }
 
 
 # ─── Patient assignments ───────────────────────────────────────────────

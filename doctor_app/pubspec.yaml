@@ -20,6 +20,7 @@ dependencies:
   web: ^1.0.0
   package_info_plus: ^8.0.0
   pdf: ^3.11.1
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:
