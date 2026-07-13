@@ -10,6 +10,7 @@ from ..models import (
     AudioCategory,
     AudioFile,
     Clinic,
+    default_question_options,
     Doctor,
     Notification,
     Patient,
@@ -643,8 +644,8 @@ def create_quiz(request, payload: CreateQuizSchema):
             quiz=quiz,
             audio_file=sample,
             text=sample.title,
-            options=['да', 'нет'],
-            correct_answer='да',
+            options=default_question_options(),
+            correct_answer=QuizQuestion.Answer.YES,
             order=i,
         )
         for i, sample in enumerate(ordered)

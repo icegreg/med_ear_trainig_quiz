@@ -296,12 +296,23 @@ class Quiz(models.Model):
         return self.title
 
 
+class Answer(models.TextChoices):
+    """Ответ на вопрос теста. Хранится как «да»/«нет» — так его пишет
+    пациентское приложение в неизменяемый QuizResult.answers; «Слышу» /
+    «Не слышу» — это только подпись в интерфейсе.
+    """
+    YES = 'да', 'Слышу'
+    NO = 'нет', 'Не слышу'
+
+
 def default_question_options():
-    return ['да', 'нет']
+    return [Answer.YES.value, Answer.NO.value]
 
 
 class QuizQuestion(models.Model):
     """Вопрос в квизе, привязан к аудио-файлу."""
+    Answer = Answer
+
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
     audio_file = models.ForeignKey(
         AudioFile, on_delete=models.SET_NULL, null=True, related_name='questions'
@@ -311,7 +322,13 @@ class QuizQuestion(models.Model):
         default=default_question_options,
         help_text='Варианты ответов, например: ["да", "нет"]',
     )
-    correct_answer = models.CharField(max_length=255)
+    # Тест на слух: почти всегда звук должен быть услышан, поэтому «слышу» —
+    # дефолт, а не то, что каждый раз вбивают руками.
+    correct_answer = models.CharField(
+        max_length=255,
+        choices=Answer.choices,
+        default=Answer.YES,
+    )
     order = models.PositiveIntegerField(default=0)
 
     class Meta:

@@ -30,6 +30,7 @@ from django.core.management.base import BaseCommand
 
 from core.models import (
     AudioFile,
+    default_question_options,
     Doctor,
     Patient,
     PatientQuizAssignment,
@@ -358,8 +359,12 @@ class Command(BaseCommand):
                 quiz=quiz,
                 audio_file=random.choice(audio_files),
                 text=text,
-                options=['да', 'нет'],
-                correct_answer=random.choice(['да', 'нет']),
+                options=default_question_options(),
+                # Тестовые данные: изредка «не слышу», чтобы разбор результата
+                # и статистика ошибок не были однообразными.
+                correct_answer=random.choice(
+                    [QuizQuestion.Answer.YES, QuizQuestion.Answer.NO]
+                ),
                 order=order,
             )
 
