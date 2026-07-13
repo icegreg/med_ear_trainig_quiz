@@ -269,6 +269,45 @@ class QuizResultSchema(Schema):
     submitted_at: datetime
 
 
+# --- Patient stats (карточка пациента у врача) ---
+
+class StatsPointSchema(Schema):
+    """Точка на графике динамики — один пройденный тест."""
+    assignment_id: int
+    quiz_title: str
+    score: int
+    total: int
+    percent: float
+    submitted_at: datetime
+
+
+class SoundErrorSchema(Schema):
+    """Ошибки пациента по одному звуку (агрегат по всем его тестам)."""
+    audio_id: int | None
+    title: str
+    category: str | None
+    answered: int
+    errors: int
+    error_percent: float
+    is_deleted: bool = False
+
+
+class AdherenceSchema(Schema):
+    """Приверженность: сколько назначено/пройдено и как быстро проходит."""
+    assigned: int
+    completed: int
+    expired: int
+    upcoming: int
+    completion_lag_days: list[int]
+    avg_completion_days: float | None
+
+
+class PatientStatsSchema(Schema):
+    dynamics: list[StatsPointSchema]
+    sound_errors: list[SoundErrorSchema]
+    adherence: AdherenceSchema
+
+
 class ResultConfirmationSchema(Schema):
     status: str
     message: str

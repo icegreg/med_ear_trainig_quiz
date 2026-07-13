@@ -9,6 +9,7 @@ import '../core/media_auth.dart';
 import '../core/password_gen.dart';
 import '../core/web_audio_player.dart';
 import '../widgets/credentials_card.dart';
+import '../widgets/patient_stats_section.dart';
 
 import '../models/assignment.dart';
 import '../models/doctor.dart';
@@ -99,6 +100,7 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
     ref.invalidate(patientsProvider);
     ref.invalidate(_assignmentsProvider(widget.patientId));
     ref.invalidate(_resultsProvider(widget.patientId));
+    ref.invalidate(patientStatsProvider(widget.patientId));
   }
 
   /// Scroll the page with PageUp/PageDown/Home/End. Flutter's built-in keyboard
@@ -245,6 +247,13 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+
+                    // Stats
+                    Text('Статистика',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    PatientStatsSection(patientId: widget.patientId),
                     const SizedBox(height: 24),
 
                     // Assignments
