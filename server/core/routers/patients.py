@@ -27,7 +27,7 @@ def get_my_profile(request):
         'username': patient.user.username,
         'doctor_id': patient.doctor_id,
         'starting_sound_id': patient.starting_sound_id,
-        'starting_sound_url': patient.starting_sound.file.url if patient.starting_sound else None,
+        'starting_sound_url': (patient.starting_sound.file_url or None) if patient.starting_sound else None,
         'logging_enabled': patient.effective_logging_enabled,
         'created_at': patient.created_at,
     }

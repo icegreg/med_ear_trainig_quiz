@@ -139,7 +139,7 @@ def _patient_dict(p: Patient) -> dict:
         'patronymic': p.patronymic,
         'full_name': p.full_name,
         'starting_sound_id': p.starting_sound_id,
-        'starting_sound_url': p.starting_sound.file.url if p.starting_sound else None,
+        'starting_sound_url': (p.starting_sound.file_url or None) if p.starting_sound else None,
         'birth_date': p.birth_date,
         'assigned_count': assigned,
         'completed_count': completed,
@@ -365,7 +365,7 @@ def get_result_breakdown(request, assignment_id: int):
             'text': question.text,
             'audio_id': audio.id if audio else None,
             'audio_title': audio.title if audio else None,
-            'audio_url': audio.file.url if audio and audio.file else None,
+            'audio_url': (audio.file_url or None) if audio else None,
             'audio_is_deleted': bool(audio and audio.is_deleted),
             'patient_answer': patient_answer,
             'correct_answer': question.correct_answer,
@@ -605,7 +605,7 @@ def get_quiz_audio(request, quiz_id: int):
         {
             'id': af.id,
             'title': af.title,
-            'file': af.file.url,
+            'file': af.file_url,
             'category_id': af.category_id,
             'duration_seconds': af.duration_seconds,
             'uploaded_at': af.uploaded_at,
@@ -686,7 +686,7 @@ def _audio_payload(af):
     return {
         'id': af.id,
         'title': af.title,
-        'file': af.file.url,
+        'file': af.file_url,
         'category_id': af.category_id,
         'duration_seconds': af.duration_seconds,
         'uploaded_at': af.uploaded_at,
@@ -735,7 +735,7 @@ def list_audio(request, category_id: int | None = None):
         {
             'id': a.id,
             'title': a.title,
-            'file': a.file.url,
+            'file': a.file_url,
             'category_id': a.category_id,
             'duration_seconds': a.duration_seconds,
             'uploaded_at': a.uploaded_at,
@@ -830,7 +830,7 @@ def move_audio(request, audio_id: int, payload: MoveAudioSchema):
     return 200, {
         'id': audio.id,
         'title': audio.title,
-        'file': audio.file.url,
+        'file': audio.file_url,
         'category_id': audio.category_id,
         'duration_seconds': audio.duration_seconds,
         'uploaded_at': audio.uploaded_at,

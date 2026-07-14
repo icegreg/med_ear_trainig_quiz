@@ -258,6 +258,13 @@ class AudioFile(SoftDeleteMixin):
         prefix = '[УДАЛЁН] ' if self.is_deleted else ''
         return f'{prefix}{self.title}'
 
+    @property
+    def file_url(self):
+        """URL файла или '' — у записи может не быть файла (заведена в админке
+        без загрузки). Обращение к `file.url` в этом случае бросает ValueError,
+        а один битый файл не должен ронять весь список аудио."""
+        return self.file.url if self.file else ''
+
     def save(self, *args, **kwargs):
         if not self.category_id:
             self.category = AudioCategory.get_default()
