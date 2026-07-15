@@ -35,6 +35,9 @@ COPY server/ .
 COPY --from=patient-build /flutter/build/web /app/flutter_web/patient
 COPY --from=doctor-build /flutter/build/web /app/flutter_web/doctor
 
+# Документация (руководство врача). Раздаётся, только если задан DOCS_DIR.
+COPY docs/ /app/docs
+
 EXPOSE 8000
 
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

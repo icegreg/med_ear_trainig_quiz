@@ -10,7 +10,7 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Версия бэкенда (можно переопределить переменной окружения в проде).
-BACKEND_VERSION = os.environ.get('BACKEND_VERSION', '1.4.1')
+BACKEND_VERSION = os.environ.get('BACKEND_VERSION', '1.5.0')
 
 # Environment: test | preprod | prod
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'test')
@@ -163,6 +163,10 @@ if ENABLE_DEBUG_TOOLBAR:
 # Flutter web app directory (подключается как WhiteNoise extra dir)
 FLUTTER_WEB_DIR = os.environ.get('FLUTTER_WEB_DIR', '')
 WHITENOISE_ROOT = FLUTTER_WEB_DIR if FLUTTER_WEB_DIR else None
+
+# Публичная документация (руководство врача и т.п.). Путь к папке docs.
+# Если задан — Django раздаёт её по /docs/ (см. config/urls.py); пусто — маршрута нет.
+DOCS_DIR = os.environ.get('DOCS_DIR', '')
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'

@@ -19,10 +19,15 @@ services:
       - "8000"
     env_file:
       - .env
+    environment:
+      # Путь к документации в контейнере. Задан → Django раздаёт /docs/.
+      # Пусто → маршрута нет. Переопределяется через DOCS_DIR в .env.
+      - DOCS_DIR=${DOCS_DIR-/app/docs}
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles
       - client_logs_data:/app/client_logs
+      - ./docs:/app/docs:ro
     depends_on:
       db:
         condition: service_healthy
