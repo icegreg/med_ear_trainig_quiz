@@ -29,6 +29,9 @@ services:
       - CORS_ALLOWED_ALL_ORIGINS=${CORS_ALLOWED_ALL_ORIGINS:-False}
       - AUTH_RATE_LIMIT=${AUTH_RATE_LIMIT:-5/m}
       - FLUTTER_WEB_DIR=/app/flutter_web
+      # Раздача /docs/ выключена по умолчанию. Чтобы включить, задать
+      # DOCS_DIR=/app/docs в переменных Coolify (документация уже в образе).
+      - DOCS_DIR=${DOCS_DIR:-}
     volumes:
       - med-ear-media:/app/media
       - med-ear-client-logs:/app/client_logs

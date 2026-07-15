@@ -7,7 +7,7 @@ from django.urls import path, re_path
 from django.views.generic import RedirectView
 
 from core.api import api
-from core.views import serve_protected_media, serve_release
+from core.views import serve_docs, serve_protected_media, serve_release
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -16,6 +16,10 @@ urlpatterns = [
     # Публичная раздача APK-релизов (без авторизации).
     re_path(r'^releases/(?P<path>.*)$', serve_release),
 ]
+
+# Публичная документация — регистрируется только если задан DOCS_DIR.
+if os.environ.get('DOCS_DIR', ''):
+    urlpatterns += [re_path(r'^docs/(?P<path>.*)$', serve_docs)]
 
 if 'debug_toolbar' in settings.INSTALLED_APPS:
     from debug_toolbar.toolbar import debug_toolbar_urls
@@ -72,5 +76,5 @@ if _flutter_dir:
     urlpatterns += [
         path('doctors', RedirectView.as_view(url='/doctors/', permanent=True)),
         re_path(r'^doctors/(?P<path>.*)$', _doctor_spa_fallback),
-        re_path(r'^(?!api/|admin/|media/|releases/|static/|doctors/?$|doctors/)(?P<path>.*)$', _patient_spa_fallback),
+        re_path(r'^(?!api/|admin/|media/|releases/|docs/|static/|doctors/?$|doctors/)(?P<path>.*)$', _patient_spa_fallback),
     ]
