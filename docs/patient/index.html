@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Руководство пациента — TNOISE</title>
+<style>
+  :root {
+    --accent: #00796B;
+    --accent-soft: #e0f2f0;
+    --bg: #ffffff;
+    --text: #1c2321;
+    --muted: #5c6b68;
+    --line: #dfe6e4;
+    --warn-bg: #fff4e5;
+    --warn-line: #e8a33d;
+    --note-bg: #eef6f5;
+  }
+  * { box-sizing: border-box; }
+  /* Кегль крупнее, чем в руководствах врача и администратора: это руководство
+     читают пациенты, в том числе пожилые и с экрана телефона. */
+  body {
+    margin: 0;
+    font: 19px/1.7 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .layout { display: flex; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
+
+  nav {
+    position: sticky; top: 0;
+    width: 300px; flex: none;
+    height: 100vh; overflow-y: auto;
+    padding: 32px 20px 48px 28px;
+    border-right: 1px solid var(--line);
+  }
+  nav .brand { font-weight: 700; font-size: 19px; margin-bottom: 4px; }
+  nav .ver { color: var(--muted); font-size: 14px; margin-bottom: 22px; }
+  nav ol { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  nav ol li { counter-increment: s; }
+  nav ol li a {
+    display: block; padding: 8px 10px; border-radius: 7px;
+    color: var(--text); text-decoration: none; font-size: 16px;
+  }
+  nav ol li a::before { content: counter(s) ". "; color: var(--muted); }
+  nav ol li a:hover { background: var(--accent-soft); color: var(--accent); }
+
+  main { flex: 1; min-width: 0; padding: 36px 44px 120px; }
+  h1 { font-size: 36px; line-height: 1.25; margin: 0 0 8px; }
+  .lead { font-size: 21px; color: var(--muted); margin: 0 0 40px; max-width: 62ch; }
+  section { scroll-margin-top: 20px; padding-top: 28px; margin-bottom: 18px; }
+  section + section { border-top: 1px solid var(--line); }
+  h2 {
+    font-size: 28px; margin: 0 0 16px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .num {
+    font-size: 16px; font-weight: 600; color: var(--accent);
+    background: var(--accent-soft); border-radius: 6px;
+    padding: 3px 9px; flex: none;
+  }
+  h3 { font-size: 21px; margin: 30px 0 10px; }
+  p, li { max-width: 64ch; }
+  ol.steps { padding-left: 24px; }
+  ol.steps > li { margin-bottom: 12px; }
+  ul { padding-left: 24px; }
+  ul li { margin-bottom: 9px; }
+
+  /* Скриншоты сняты в планшетном портрете — во всю ширину они были бы
+     непомерно высокими, поэтому ограничиваем и выравниваем по левому краю. */
+  figure { margin: 24px 0 30px; }
+  figure img {
+    display: block; width: 100%; max-width: 380px; height: auto;
+    border: 1px solid var(--line); border-radius: 12px;
+  }
+  figcaption { font-size: 15px; color: var(--muted); margin-top: 10px; max-width: 60ch; }
+
+  .warn, .note {
+    border-left: 4px solid var(--accent);
+    background: var(--note-bg);
+    padding: 15px 19px; border-radius: 0 8px 8px 0;
+    margin: 22px 0; max-width: 64ch;
+  }
+  .warn { border-left-color: var(--warn-line); background: var(--warn-bg); }
+  .warn strong, .note strong { display: block; margin-bottom: 4px; }
+  .warn p, .note p { margin: 0; }
+
+  table { border-collapse: collapse; margin: 20px 0; font-size: 18px; }
+  th, td { border: 1px solid var(--line); padding: 10px 15px; text-align: left; }
+  th { background: var(--note-bg); font-weight: 600; }
+
+  code {
+    background: var(--note-bg); padding: 1px 6px; border-radius: 4px;
+    font: 16px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .btn {
+    display: inline-block; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent);
+    padding: 1px 8px; border-radius: 5px;
+  }
+  footer {
+    margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 15px;
+  }
+
+  @media (max-width: 900px) {
+    nav { display: none; }
+    main { padding: 24px 20px 80px; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 24px; }
+  }
+  @media print {
+    nav { display: none; }
+    section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav>
+  <div class="brand">Руководство пациента</div>
+  <div class="ver">Платформа TNOISE · приложение 0.10.1</div>
+  <ol>
+    <li><a href="#install">Установка приложения</a></li>
+    <li><a href="#first-run">Первый запуск</a></li>
+    <li><a href="#login">Вход</a></li>
+    <li><a href="#pin">Код быстрого входа</a></li>
+    <li><a href="#home">Главный экран</a></li>
+    <li><a href="#quizzes">Мои тесты</a></li>
+    <li><a href="#prep">Подготовка к тесту</a></li>
+    <li><a href="#play">Прохождение теста</a></li>
+    <li><a href="#done">Тест завершён</a></li>
+    <li><a href="#profile">Профиль</a></li>
+    <li><a href="#settings">Настройки</a></li>
+    <li><a href="#password">Смена пароля</a></li>
+    <li><a href="#faq">Частые вопросы</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<h1>Руководство пациента</h1>
+<p class="lead">
+  Как установить приложение TNOISE, войти в него и пройти тест слуха,
+  который назначил ваш врач.
+</p>
+
+<div class="note">
+  <strong>Что вам понадобится</strong>
+  <p>
+    Телефон или планшет, наушники и логин с паролем — их выдаёт врач.
+    Придумывать логин самостоятельно не нужно.
+  </p>
+</div>
+
+<section id="install">
+  <h2><span class="num">1</span> Установка приложения</h2>
+  <p>
+    Приложение не нужно искать в магазине приложений — оно скачивается
+    по ссылке, которую даст врач или клиника.
+  </p>
+  <ol class="steps">
+    <li>Откройте ссылку на телефоне. Начнётся загрузка файла с приложением.</li>
+    <li>
+      Когда файл скачается, нажмите на него. Телефон спросит разрешение
+      на установку — разрешите. Обычно это выглядит как вопрос
+      «Разрешить установку приложений из этого источника?».
+    </li>
+    <li>Дождитесь окончания установки и нажмите <span class="btn">Открыть</span>.</li>
+  </ol>
+  <p>
+    На главном экране телефона появится значок с названием <b>TNOISE</b>.
+  </p>
+  <div class="warn">
+    <strong>Если раньше стояло приложение с другим названием</strong>
+    <p>
+      Приложение сменило название, и новая версия ставится отдельно от старой.
+      Старое приложение нужно удалить, а в новом — войти заново, по логину и
+      паролю. Код быстрого входа при этом тоже задаётся заново.
+    </p>
+  </div>
+</section>
+
+<section id="first-run">
+  <h2><span class="num">2</span> Первый запуск</h2>
+  <p>
+    При первом открытии приложение коротко расскажет о себе — три экрана.
+    Листайте их кнопкой <span class="btn">Далее</span> или нажмите
+    <span class="btn">Пропустить</span>, чтобы перейти сразу ко входу.
+  </p>
+  <figure>
+    <img src="images/01-onboarding-welcome.png" alt="Приветственный экран TNOISE">
+    <figcaption>Экран приветствия.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/02-onboarding-headphones.png" alt="Экран с просьбой подключить наушники">
+    <figcaption>Наушники обязательны: без них результат теста будет неточным.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/03-onboarding-howto.png" alt="Экран с объяснением, как отвечать">
+    <figcaption>Отвечать нужно всего двумя кнопками — «Слышу» или «Не слышу».</figcaption>
+  </figure>
+</section>
+
+<section id="login">
+  <h2><span class="num">3</span> Вход</h2>
+  <p>Введите логин и пароль, которые вам выдал врач, и нажмите
+    <span class="btn">Войти</span>.</p>
+  <figure>
+    <img src="images/04-login-empty.png" alt="Пустая форма входа">
+    <figcaption>Форма входа.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/05-login-filled.png" alt="Заполненная форма входа">
+    <figcaption>Пароль скрыт точками — это нормально.</figcaption>
+  </figure>
+  <div class="note">
+    <strong>Вход нужен один раз</strong>
+    <p>
+      Приложение запомнит вас примерно на три месяца. Каждый день вводить
+      пароль не придётся — достаточно кода быстрого входа (следующий раздел).
+    </p>
+  </div>
+</section>
+
+<section id="pin">
+  <h2><span class="num">4</span> Код быстрого входа</h2>
+  <p>
+    После первого входа приложение предложит придумать код из четырёх цифр.
+    Он заменяет пароль при повседневном открытии приложения.
+  </p>
+  <figure>
+    <img src="images/06-pin-setup.png" alt="Экран создания кода быстрого входа">
+    <figcaption>Придумайте код из четырёх цифр.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/07-pin-repeat.png" alt="Экран повторного ввода кода">
+    <figcaption>Тот же код нужно ввести второй раз — чтобы не ошибиться.</figcaption>
+  </figure>
+  <p>
+    Если создавать код сейчас не хочется, нажмите <span class="btn">Позже</span>
+    в правом верхнем углу. Тогда при каждом открытии приложение будет
+    спрашивать пароль.
+  </p>
+  <div class="note">
+    <strong>Забыли код?</strong>
+    <p>
+      Ничего страшного. После пяти неверных попыток приложение просто
+      попросит войти по логину и паролю, и код можно будет задать заново.
+      Данные при этом не теряются.
+    </p>
+  </div>
+</section>
+
+<section id="home">
+  <h2><span class="num">5</span> Главный экран</h2>
+  <p>
+    Здесь видно, сколько тестов вам сейчас доступно. Нажмите на эту строку,
+    чтобы перейти к списку.
+  </p>
+  <figure>
+    <img src="images/08-home.png" alt="Главный экран приложения">
+    <figcaption>
+      Внизу три раздела: <b>Главная</b>, <b>Тесты</b> и <b>Профиль</b>.
+      Шестерёнка в правом верхнем углу открывает настройки.
+    </figcaption>
+  </figure>
+</section>
+
+<section id="quizzes">
+  <h2><span class="num">6</span> Мои тесты</h2>
+  <p>
+    В разделе <b>Тесты</b> перечислены тесты, которые назначил врач.
+    Напротив каждого — кнопка <span class="btn">Начать</span>.
+  </p>
+  <figure>
+    <img src="images/09-quiz-list.png" alt="Список назначенных тестов">
+    <figcaption>
+      Тесты со словом «Доступен» ещё не пройдены. Пройденные уходят
+      из этого списка — проходить их повторно не нужно и нельзя.
+    </figcaption>
+  </figure>
+  <p>
+    Если список пуст, значит врач пока не назначил вам ни одного теста.
+    Это не ошибка приложения.
+  </p>
+</section>
+
+<section id="prep">
+  <h2><span class="num">7</span> Подготовка к тесту</h2>
+  <p>
+    Перед началом приложение проверяет, всё ли готово, и показывает три
+    строки с зелёными галочками.
+  </p>
+  <figure>
+    <img src="images/10-quiz-prep.png" alt="Экран подготовки к тесту">
+    <figcaption>Все три проверки пройдены — можно начинать.</figcaption>
+  </figure>
+  <table>
+    <tr><th>Проверка</th><th>Что означает</th></tr>
+    <tr>
+      <td>Заряд батареи</td>
+      <td>Батарея заряжена достаточно, чтобы тест не прервался. Если заряд
+        ниже 20%, приложение попросит поставить телефон на зарядку.</td>
+    </tr>
+    <tr>
+      <td>Громкость</td>
+      <td>Громкость телефона выставлена на нужный уровень. Менять её во время
+        теста нельзя — результат будет неверным.</td>
+    </tr>
+    <tr>
+      <td>Аудио-файлы</td>
+      <td>Звуки для теста загружены на телефон. Дальше интернет уже не нужен.</td>
+    </tr>
+  </table>
+  <div class="warn">
+    <strong>Наденьте наушники до начала</strong>
+    <p>
+      Тест проверяет, какие звуки вы слышите. Без наушников или при
+      изменённой громкости результат окажется неточным, и врач сделает
+      неверный вывод.
+    </p>
+  </div>
+  <p>Когда всё готово, нажмите <span class="btn">Начать тест</span>.</p>
+</section>
+
+<section id="play">
+  <h2><span class="num">8</span> Прохождение теста</h2>
+  <p>
+    Приложение проигрывает звук. Ваша задача — ответить, услышали вы его
+    или нет. Других действий не требуется.
+  </p>
+  <figure>
+    <img src="images/11-quiz-play.png" alt="Экран прохождения теста с кнопками Слышу и Не слышу">
+    <figcaption>
+      Сверху видно, какой это звук по счёту — например, «Звук 1 из 8».
+    </figcaption>
+  </figure>
+  <ul>
+    <li>Услышали звук — нажмите зелёную кнопку <span class="btn">Слышу</span>.</li>
+    <li>Не услышали — нажмите красную <span class="btn">Не слышу</span>.</li>
+  </ul>
+  <p>
+    После ответа сразу начинается следующий звук. Так до конца теста.
+  </p>
+  <div class="note">
+    <strong>Отвечайте честно</strong>
+    <p>
+      Если звука не слышно — так и отвечайте. «Не слышу» — это не ошибка
+      и не плохая оценка: именно эти ответы и нужны врачу, чтобы понять,
+      как вы слышите.
+    </p>
+  </div>
+</section>
+
+<section id="done">
+  <h2><span class="num">9</span> Тест завершён</h2>
+  <p>
+    После последнего звука появится экран с подтверждением, что ответы
+    отправлены врачу.
+  </p>
+  <figure>
+    <img src="images/15-quiz-done.png" alt="Экран завершения теста">
+    <figcaption>Ответы загружены на сервер — врач их увидит.</figcaption>
+  </figure>
+  <div class="warn">
+    <strong>Тест проходится только один раз</strong>
+    <p>
+      Пройти тот же тест заново нельзя — ответы уже отправлены и изменить
+      их не получится. Если вы прервались или отвечали наугад, скажите об
+      этом врачу: он назначит новый тест.
+    </p>
+  </div>
+  <p>Нажмите <span class="btn">На главную</span>, чтобы вернуться.</p>
+</section>
+
+<section id="profile">
+  <h2><span class="num">10</span> Профиль</h2>
+  <p>
+    В разделе <b>Профиль</b> показаны ваши данные и врач, к которому вы
+    прикреплены. Отсюда же можно выйти из приложения.
+  </p>
+  <figure>
+    <img src="images/12-profile.png" alt="Экран профиля">
+    <figcaption>Данные профиля меняет врач — самостоятельно их исправить нельзя.</figcaption>
+  </figure>
+  <div class="note">
+    <strong>Не выходите без необходимости</strong>
+    <p>
+      После выхода понадобится снова вводить логин и пароль. Чтобы просто
+      закрыть приложение, достаточно свернуть его.
+    </p>
+  </div>
+</section>
+
+<section id="settings">
+  <h2><span class="num">11</span> Настройки</h2>
+  <p>Настройки открываются шестерёнкой в правом верхнем углу главного экрана.</p>
+  <figure>
+    <img src="images/13-settings.png" alt="Экран настроек">
+    <figcaption>Настройки приложения.</figcaption>
+  </figure>
+  <ul>
+    <li><b>Тёмная тема</b> — тёмное оформление, если светлое режет глаза.</li>
+    <li><b>Минимальный заряд батареи</b> — при каком заряде приложение
+      не даст начать тест. По умолчанию 20%.</li>
+    <li><b>Проверить звук</b> — проигрывает пробный сигнал. Удобно, чтобы
+      заранее убедиться, что наушники работают.</li>
+    <li><b>Изменить код доступа</b> и <b>Удалить код доступа</b> — так в
+      приложении называется управление кодом быстрого входа.</li>
+  </ul>
+  <div class="warn">
+    <strong>Раздел «Подключение» трогать не нужно</strong>
+    <p>
+      Поле <code>API URL</code> внизу настроек — техническое. Если изменить
+      его самостоятельно, приложение перестанет связываться с сервером.
+      Меняйте его, только если об этом прямо попросил врач или техподдержка.
+    </p>
+  </div>
+</section>
+
+<section id="password">
+  <h2><span class="num">12</span> Смена пароля</h2>
+  <p>
+    Пароль, который выдал врач, можно заменить на свой. Введите текущий
+    пароль, затем новый — дважды, и нажмите <span class="btn">Сохранить</span>.
+  </p>
+  <figure>
+    <img src="images/14-change-password.png" alt="Экран смены пароля">
+    <figcaption>Смена пароля.</figcaption>
+  </figure>
+  <div class="note">
+    <strong>Запишите новый пароль</strong>
+    <p>
+      Врач не видит ваш пароль и не сможет его подсказать. Если новый пароль
+      забудется, врачу придётся выдать вам новый.
+    </p>
+  </div>
+</section>
+
+<section id="faq">
+  <h2><span class="num">13</span> Частые вопросы</h2>
+
+  <h3>Я забыл пароль</h3>
+  <p>
+    Обратитесь к своему врачу — он выдаст новый. Восстановить пароль
+    самостоятельно, по почте или СМС, в приложении нельзя.
+  </p>
+
+  <h3>Приложение просит код, а я его не помню</h3>
+  <p>
+    Введите любой код пять раз — после этого приложение предложит войти
+    по логину и паролю. Затем задайте новый код в настройках.
+  </p>
+
+  <h3>Я не слышу ни одного звука</h3>
+  <p>
+    Проверьте, что наушники вставлены до конца, а громкость телефона не на
+    нуле. В настройках есть кнопка <span class="btn">Проверить звук</span> —
+    она проиграет пробный сигнал. Если и он не слышен, дело в наушниках или
+    громкости, а не в тесте.
+  </p>
+
+  <h3>Список тестов пуст</h3>
+  <p>
+    Значит, врач пока ничего не назначил. Появится — увидите на главном экране.
+  </p>
+
+  <h3>Можно ли пройти тест ещё раз?</h3>
+  <p>
+    Нет. Каждый тест проходится один раз. Если нужен повтор, врач назначит
+    новый тест.
+  </p>
+
+  <h3>Что будет, если тест прервётся?</h3>
+  <p>
+    Скажите об этом врачу. Он посмотрит, что записалось, и при необходимости
+    назначит тест заново.
+  </p>
+
+  <h3>У меня сменился врач</h3>
+  <p>
+    Ничего делать не нужно. Логин, пароль и пройденные тесты остаются
+    прежними — в профиле просто появится новый врач.
+  </p>
+
+  <h3>Нужен ли интернет во время теста?</h3>
+  <p>
+    Только до начала: звуки скачиваются на этапе подготовки. Сам тест идёт
+    без интернета, но чтобы отправить ответы врачу, связь снова понадобится.
+  </p>
+</section>
+
+<footer>
+  Руководство пациента · Платформа TNOISE · приложение версии 0.10.1.<br>
+  Все имена и данные на скриншотах вымышлены.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

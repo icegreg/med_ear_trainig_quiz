@@ -18,7 +18,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const _pages = [
     _OnboardingPage(
       icon: Icons.hearing,
-      title: 'Тестирование слуха',
+      title: 'TNOISE',
       description: 'Добро пожаловать! Это приложение поможет '
           'провести диагностику вашего слуха.',
     ),
