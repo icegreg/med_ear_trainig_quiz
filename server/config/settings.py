@@ -10,7 +10,7 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Версия бэкенда (можно переопределить переменной окружения в проде).
-BACKEND_VERSION = os.environ.get('BACKEND_VERSION', '1.5.0')
+BACKEND_VERSION = os.environ.get('BACKEND_VERSION', '1.6.0')
 
 # Environment: test | preprod | prod
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'test')
@@ -74,7 +74,22 @@ if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append('debug_toolbar')
     MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://localhost', 'https://*.dev.webprods.ru']
+# CSRF_TRUSTED_ORIGINS: у каждого окружения свой список по умолчанию.
+# Переопределяется переменной CSRF_TRUSTED_ORIGINS (origin'ы через запятую).
+_CSRF_TRUSTED_DEFAULTS = {
+    'dev': 'http://localhost:8000,http://localhost,http://127.0.0.1',
+    'test': 'http://localhost:8000,http://localhost,http://127.0.0.1',
+    'preprod': 'https://*.dev.webprods.ru',
+    'prod': 'https://tnoise.com,https://www.tnoise.com',
+}
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        _CSRF_TRUSTED_DEFAULTS.get(ENVIRONMENT, _CSRF_TRUSTED_DEFAULTS['dev']),
+    ).split(',')
+    if origin.strip()
+]
 
 ROOT_URLCONF = 'config.urls'
 

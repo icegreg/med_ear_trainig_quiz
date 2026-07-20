@@ -2,7 +2,7 @@
 ///
 /// Конвенция (общая с patient_app):
 ///   dev             — локальный запуск (flutter run -d chrome): docker-compose на localhost
-///   prod            — деплой на web (Coolify, medear.ru): относительный /api, тот же origin
+///   prod            — деплой на web (Coolify, tnoise.com): относительный /api, тот же origin
 ///   android-dev     — Android-эмулятор: 10.0.2.2 = хост-машина
 ///   android-preprod — Android APK на preprod-стенде (Coolify): ear.dev.webprods.ru
 ///   android-prod    — Android APK в проде: абсолютный URL продакшена
@@ -13,7 +13,7 @@ const Map<String, String> kDefaultApiUrls = {
   'prod': '/api',
   'android-dev': 'http://10.0.2.2/api',
   'android-preprod': 'https://ear.dev.webprods.ru/api',
-  'android-prod': 'https://api.medear.ru/api',
+  'android-prod': 'https://tnoise.com/api',
 };
 
 String get kApiBaseUrl => kDefaultApiUrls[kFlavor] ?? kDefaultApiUrls['dev']!;

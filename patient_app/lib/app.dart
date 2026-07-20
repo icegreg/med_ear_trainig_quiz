@@ -87,7 +87,7 @@ class _PatientAppState extends ConsumerState<PatientApp>
     ref.listen(lockProvider, (_, __) => _restartIdleTimer());
 
     return MaterialApp.router(
-      title: 'Тест слуха',
+      title: 'TNOISE',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),

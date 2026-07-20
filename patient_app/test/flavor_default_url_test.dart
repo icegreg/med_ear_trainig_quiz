@@ -6,7 +6,7 @@ import 'package:patient_app/core/constants.dart';
 ///
 /// Реальный хост каждого окружения теперь живёт в нативном product flavor
 /// (Gradle buildConfigField API_BASE_URL) и отдаётся в Dart через MethodChannel
-/// com.medear.patient_app/config. Здесь мы мокаем этот канал и убеждаемся, что
+/// com.tnoise.patient/config. Здесь мы мокаем этот канал и убеждаемся, что
 /// initFlavorConfig() поднимает пришедший хост, а kDefaultApiBaseUrl его отдаёт.
 ///
 /// Физическую привязку flavor→хост (в каждом APK только свой адрес) проверяем
@@ -14,7 +14,7 @@ import 'package:patient_app/core/constants.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const channel = MethodChannel('com.medear.patient_app/config');
+  const channel = MethodChannel('com.tnoise.patient/config');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
@@ -22,13 +22,13 @@ void main() {
 
   test('initFlavorConfig берёт API-хост из нативного flavor-канала', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'getApiBaseUrl') return 'https://api.medear.ru/api';
+      if (call.method == 'getApiBaseUrl') return 'https://tnoise.com/api';
       return null;
     });
 
     await initFlavorConfig();
 
-    expect(kDefaultApiBaseUrl, 'https://api.medear.ru/api');
+    expect(kDefaultApiBaseUrl, 'https://tnoise.com/api');
     expect(kDefaultApiBaseUrl, isNot(contains('webprods')));
     expect(kDefaultApiBaseUrl, isNot(contains('10.0.2.2')));
   });

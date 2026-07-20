@@ -12,8 +12,8 @@ from django.utils.safestring import mark_safe
 from . import client_logs, doctor_logs
 
 # Версия бэкенда видна в шапке и на главной странице админки.
-admin.site.site_header = f'Тест слуха · бэкенд v{settings.BACKEND_VERSION}'
-admin.site.site_title = 'Тест слуха — администрирование'
+admin.site.site_header = f'TNOISE · бэкенд v{settings.BACKEND_VERSION}'
+admin.site.site_title = 'TNOISE — администрирование'
 admin.site.index_title = f'Администрирование (бэкенд v{settings.BACKEND_VERSION})'
 
 
