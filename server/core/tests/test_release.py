@@ -1,8 +1,11 @@
 """Тесты реестра релизов APK: модель, публичная раздача, публичный API."""
+import io
 import os
 import tempfile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
@@ -18,7 +21,7 @@ def make_release(version_name='0.6.0', version_code=1, is_default=False):
         is_default=is_default,
         file_size=len(b'APKDATA'),
         apk=SimpleUploadedFile(
-            f'patient_app-{version_name}+{version_code}.apk', b'APKDATA'
+            f'tnoise-{version_name}+{version_code}.apk', b'APKDATA'
         ),
     )
 
@@ -113,3 +116,43 @@ class ReleaseApiTest(TestCase):
     def test_latest_empty_returns_404(self):
         resp = self.client.get('/api/releases/latest')
         self.assertEqual(resp.status_code, 404)
+
+
+@override_settings(MEDIA_ROOT=_MEDIA)
+class RegisterReleaseCommandTest(TestCase):
+    """register_release задаёт имя, под которым APK скачивает пользователь."""
+
+    def _build_apk(self, name='tnoise-prod-release-0.10.0+7.apk'):
+        """Кладёт фейковый APK во временный файл, как это делает сборка."""
+        path = os.path.join(tempfile.mkdtemp(prefix='test_apk_'), name)
+        with open(path, 'wb') as fh:
+            fh.write(b'APKDATA')
+        return path
+
+    def test_stored_filename_is_branded(self):
+        # Версии у тестов разные: MEDIA_ROOT общий на модуль, и при совпадении
+        # имени Django допишет к файлу случайный суффикс.
+        call_command(
+            'register_release', apk=self._build_apk(),
+            version_name='0.10.0', version_code=7, stdout=io.StringIO(),
+        )
+        release = Release.objects.get()
+        # Имя в хранилище не зависит от имени собранного файла: flavor в него
+        # не входит (реестр привязан к стенду), '+' заменён на '-'.
+        self.assertEqual(
+            os.path.basename(release.apk.name), 'tnoise-0.10.0-7.apk'
+        )
+        self.assertIn('tnoise-0.10.0-7.apk', release.download_url)
+
+    def test_rejects_duplicate_version(self):
+        args = dict(version_name='0.11.0', version_code=8, stdout=io.StringIO())
+        call_command('register_release', apk=self._build_apk(), **args)
+        with self.assertRaises(CommandError):
+            call_command('register_release', apk=self._build_apk(), **args)
+
+    def test_rejects_missing_apk(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                'register_release', apk='/nope/absent.apk',
+                version_name='0.10.0', version_code=7, stdout=io.StringIO(),
+            )
