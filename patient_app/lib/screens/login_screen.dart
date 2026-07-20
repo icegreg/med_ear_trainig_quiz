@@ -63,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Тест слуха',
+                  'TNOISE',
                   style: theme.textTheme.headlineLarge,
                 ),
                 const SizedBox(height: 8),

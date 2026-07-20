@@ -1,11 +1,11 @@
 {
-    "name": "doctor_app",
-    "short_name": "doctor_app",
+    "name": "TNOISE — приложение врача",
+    "short_name": "TNOISE Врач",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "TNOISE — приложение врача: пациенты, назначение тестов, результаты.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

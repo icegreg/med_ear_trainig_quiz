@@ -28,7 +28,7 @@ class DoctorApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Врач — Тест слуха',
+      title: 'TNOISE — приложение врача',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const _AppScrollBehavior(),
       theme: lightTheme,

@@ -194,7 +194,7 @@ class Command(BaseCommand):
             user = User.objects.create_user(
                 username=username, password=password,
                 first_name=first, last_name=last,
-                email=f'{username}@medear.test',
+                email=f'{username}@tnoise.test',
             )
             doctor = Doctor.objects.create(
                 user=user, last_name=last, first_name=first,

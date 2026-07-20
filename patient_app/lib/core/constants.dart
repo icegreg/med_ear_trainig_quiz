@@ -21,7 +21,7 @@ final String kFlavor =
 /// Dart-бинаре нет хостов вовсе, а в каждом APK физически присутствует лишь
 /// адрес собственного окружения (Kaiten #67021716).
 const MethodChannel _configChannel =
-    MethodChannel('com.medear.patient_app/config');
+    MethodChannel('com.tnoise.patient/config');
 
 String? _apiBaseUrl;
 
