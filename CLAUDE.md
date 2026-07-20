@@ -148,7 +148,7 @@ python manage.py generate_test_data --output-dir /tmp
   ```bash
   APK_FLAVOR=preprod docker compose --profile build run --rm apk-build
   docker compose exec web python manage.py register_release \
-      --apk /app/media/releases/incoming/app-preprod-release.apk \
+      --apk /app/media/releases/incoming/tnoise-preprod-release-0.10.0+7.apk \
       --version-name 0.6.0 --version-code 2 --commit $(git rev-parse HEAD) --set-default
   ```
 - **Автосборка**: CI job `build-apk` собирает release-APK (preprod+prod) при

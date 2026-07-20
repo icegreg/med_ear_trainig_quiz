@@ -84,7 +84,7 @@ services:
   # откуда web-сервис его регистрирует. Flavor задаётся APK_FLAVOR (по умолчанию
   # preprod — под стенд). После сборки выполнить регистрацию:
   #   docker compose exec web python manage.py register_release \
-  #     --apk /app/media/releases/incoming/app-<flavor>-release.apk \
+  #     --apk /app/media/releases/incoming/tnoise-<flavor>-release-<versionName>+<versionCode>.apk \
   #     --version-name <versionName> --version-code <versionCode> \
   #     --commit $(git rev-parse HEAD) --set-default
   apk-build:
@@ -101,7 +101,7 @@ services:
       sh -c "flutter pub get &&
              flutter build apk --flavor $${APK_FLAVOR} --release &&
              mkdir -p /out/releases/incoming &&
-             cp build/app/outputs/flutter-apk/app-$${APK_FLAVOR}-release.apk /out/releases/incoming/ &&
+             cp build/app/outputs/apk/$${APK_FLAVOR}/release/tnoise-*.apk /out/releases/incoming/ &&
              chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
 
 volumes:

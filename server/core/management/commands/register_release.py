@@ -6,8 +6,8 @@
 Примеры:
   # Зарегистрировать APK и сразу сделать его дефолтным
   python manage.py register_release \
-      --apk build/app/outputs/flutter-apk/app-prod-release.apk \
-      --version-name 0.6.0 --version-code 2 --commit $GIT_SHA --set-default
+      --apk build/app/outputs/apk/prod/release/tnoise-prod-release-0.10.0+7.apk \
+      --version-name 0.10.0 --version-code 7 --commit $GIT_SHA --set-default
 
   # Просто добавить в реестр, не трогая дефолт
   python manage.py register_release --apk out.apk --version-name 0.6.0 --version-code 2
@@ -60,8 +60,11 @@ class Command(BaseCommand):
             notes=opts['notes'],
             file_size=os.path.getsize(apk_path),
         )
+        # Имя, под которым APK ложится в хранилище и раздаётся пользователю.
+        # Flavor в имя не входит: реестр привязан к стенду, у preprod и prod
+        # свои БД, поэтому flavor константный и в модели Release не хранится.
         # Дефис, а не '+': Django strip'ает '+' из имени файла в хранилище.
-        filename = f'patient_app-{version_name}-{version_code}.apk'
+        filename = f'tnoise-{version_name}-{version_code}.apk'
         with open(apk_path, 'rb') as fh:
             release.apk.save(filename, File(fh), save=True)
 

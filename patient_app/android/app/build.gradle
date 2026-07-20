@@ -68,12 +68,15 @@ android {
         }
     }
 
-    // Имя итогового APK: patient_app-<flavor>-<versionName>+<versionCode>-<buildType>.apk
-    // Например: patient_app-prod-0.6.0+2-release.apk
+    // Имя итогового APK: tnoise-<flavor>-<buildType>-<versionName>+<versionCode>.apk
+    // Например: tnoise-prod-release-0.10.0+7.apk
+    // Файл появляется в build/app/outputs/apk/<flavor>/<buildType>/ — именно
+    // оттуда его забирают CI и сборочный сервис apk-build (не из flutter-apk/,
+    // куда Flutter кладёт копию под своим стандартным именем).
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             output.outputFileName =
-                "patient_app-${variant.flavorName}-${variant.versionName}+${variant.versionCode}-${variant.buildType.name}.apk"
+                "tnoise-${variant.flavorName}-${variant.buildType.name}-${variant.versionName}+${variant.versionCode}.apk"
         }
     }
 }

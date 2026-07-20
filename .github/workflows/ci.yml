@@ -124,5 +124,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patient-apk-${{ matrix.flavor }}
-          path: patient_app/build/app/outputs/flutter-apk/app-${{ matrix.flavor }}-release.apk
+          # Имя файла задаётся в android/app/build.gradle (outputFileName) и
+          # содержит версию, поэтому берём по маске из flavor-директории.
+          path: patient_app/build/app/outputs/apk/${{ matrix.flavor }}/release/tnoise-*.apk
           if-no-files-found: error
