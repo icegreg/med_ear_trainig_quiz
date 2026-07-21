@@ -156,3 +156,66 @@ class RegisterReleaseCommandTest(TestCase):
                 'register_release', apk='/nope/absent.apk',
                 version_name='0.10.0', version_code=7, stdout=io.StringIO(),
             )
+
+
+@override_settings(MEDIA_ROOT=_MEDIA)
+class RegisterIncomingCommandTest(TestCase):
+    """register_incoming выводит версию из имени файла в incoming/ и идемпотентен."""
+
+    def setUp(self):
+        self.incoming = os.path.join(_MEDIA, 'releases', 'incoming')
+        os.makedirs(self.incoming, exist_ok=True)
+        for f in os.listdir(self.incoming):
+            os.remove(os.path.join(self.incoming, f))
+
+    def _incoming(self, name):
+        with open(os.path.join(self.incoming, name), 'wb') as fh:
+            fh.write(b'APKDATA')
+
+    def _run(self, **opts):
+        call_command('register_incoming', stdout=io.StringIO(), **opts)
+
+    def test_registers_and_parses_version_from_filename(self):
+        self._incoming('tnoise-preprod-release-0.12.0+9.apk')
+        self._run()
+        rel = Release.objects.get()
+        self.assertEqual(rel.version_name, '0.12.0')
+        self.assertEqual(rel.version_code, 9)
+        # В хранилище — каноническое имя, а не имя из incoming.
+        self.assertEqual(os.path.basename(rel.apk.name), 'tnoise-0.12.0-9.apk')
+
+    def test_idempotent_skips_duplicate(self):
+        self._incoming('tnoise-preprod-release-0.12.1+10.apk')
+        self._run()
+        # Повторный прогон той же версии не падает и не дублирует.
+        self._run()
+        self.assertEqual(Release.objects.count(), 1)
+
+    def test_flavor_filter_picks_matching(self):
+        self._incoming('tnoise-preprod-release-0.13.0+11.apk')
+        self._incoming('tnoise-prod-release-0.14.0+12.apk')
+        self._run(flavor='prod')
+        rel = Release.objects.get()
+        self.assertEqual(rel.version_name, '0.14.0')
+
+    def test_ambiguous_without_flavor_fails(self):
+        self._incoming('tnoise-preprod-release-0.13.0+11.apk')
+        self._incoming('tnoise-prod-release-0.14.0+12.apk')
+        with self.assertRaises(CommandError):
+            self._run()
+        self.assertEqual(Release.objects.count(), 0)
+
+    def test_no_candidates_fails(self):
+        with self.assertRaises(CommandError):
+            self._run()
+
+    def test_cleanup_removes_incoming_file(self):
+        name = 'tnoise-preprod-release-0.15.0+13.apk'
+        self._incoming(name)
+        self._run(cleanup=True)
+        self.assertFalse(os.path.isfile(os.path.join(self.incoming, name)))
+
+    def test_set_default(self):
+        self._incoming('tnoise-preprod-release-0.16.0+14.apk')
+        self._run(set_default=True)
+        self.assertTrue(Release.objects.get().is_default)
