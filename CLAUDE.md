@@ -144,12 +144,21 @@ python manage.py generate_test_data --output-dir /tmp
   - `GET /api/releases/` — список релизов; `GET /api/releases/latest` — дефолтный.
 - **Админка**: раздел «Релизы APK» — список, загрузка, action «Сделать дефолтным»
   (`Release.set_default()` снимает прежний дефолт и обновляет `latest.apk`).
-- **Сборка APK** (docker-композиция, профиль `build`):
+- **Сборка + регистрация одной командой** (локалка/preprod):
+  ```bash
+  scripts/build-and-register-apk.sh                  # preprod, дефолт, cleanup
+  APK_FLAVOR=prod scripts/build-and-register-apk.sh  # prod
+  ```
+  Скрипт собирает APK (`apk-build`) и регистрирует его командой `register_incoming`,
+  которая выводит версию из имени файла (`tnoise-<flavor>-release-<vName>+<vCode>.apk`)
+  и идемпотентна (повтор той же версии — пропуск). Сборка и регистрация в разных
+  контейнерах: БД только у `web`, Flutter только у `apk-build`.
+- **Ручная сборка/регистрация** (по шагам, если нужен контроль):
   ```bash
   APK_FLAVOR=preprod docker compose --profile build run --rm apk-build
-  docker compose exec web python manage.py register_release \
-      --apk /app/media/releases/incoming/tnoise-preprod-release-0.10.0+7.apk \
-      --version-name 0.6.0 --version-code 2 --commit $(git rev-parse HEAD) --set-default
+  docker compose exec web python manage.py register_incoming \
+      --flavor preprod --set-default --cleanup --commit $(git rev-parse HEAD)
+  # register_release (версия аргументами, падает на дубле) — для деплоя стендов
   ```
 - **Автосборка**: CI job `build-apk` собирает release-APK (preprod+prod) при
   **push в main** и публикует артефактами; доставку на стенд (вызов

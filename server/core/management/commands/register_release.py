@@ -14,7 +14,6 @@
 """
 import os
 
-from django.core.files import File
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Release
@@ -53,23 +52,11 @@ class Command(BaseCommand):
                 f'Релиз {version_name}+{version_code} уже зарегистрирован.'
             )
 
-        release = Release(
-            version_name=version_name,
-            version_code=version_code,
-            commit_sha=opts['commit'],
-            notes=opts['notes'],
-            file_size=os.path.getsize(apk_path),
+        release = Release.create_from_apk(
+            apk_path, version_name, version_code,
+            commit=opts['commit'], notes=opts['notes'],
+            set_default=opts['set_default'],
         )
-        # Имя, под которым APK ложится в хранилище и раздаётся пользователю.
-        # Flavor в имя не входит: реестр привязан к стенду, у preprod и prod
-        # свои БД, поэтому flavor константный и в модели Release не хранится.
-        # Дефис, а не '+': Django strip'ает '+' из имени файла в хранилище.
-        filename = f'tnoise-{version_name}-{version_code}.apk'
-        with open(apk_path, 'rb') as fh:
-            release.apk.save(filename, File(fh), save=True)
-
-        if opts['set_default']:
-            release.set_default()
 
         self.stdout.write(self.style.SUCCESS(
             f'Зарегистрирован релиз {release} '

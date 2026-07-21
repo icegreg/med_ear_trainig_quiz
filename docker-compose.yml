@@ -82,11 +82,13 @@ services:
   # ─── Сборка пациентского APK (профиль "build") ─────────────────────────
   # Собирает release-APK нужного flavor'а и кладёт его в media-том (staging),
   # откуда web-сервис его регистрирует. Flavor задаётся APK_FLAVOR (по умолчанию
-  # preprod — под стенд). После сборки выполнить регистрацию:
-  #   docker compose exec web python manage.py register_release \
-  #     --apk /app/media/releases/incoming/tnoise-<flavor>-release-<versionName>+<versionCode>.apk \
-  #     --version-name <versionName> --version-code <versionCode> \
-  #     --commit $(git rev-parse HEAD) --set-default
+  # preprod — под стенд).
+  #
+  # Сборка + регистрация одной командой:
+  #   scripts/build-and-register-apk.sh
+  # Либо по шагам — регистрация в web (там БД), версия берётся из имени файла:
+  #   docker compose exec web python manage.py register_incoming \
+  #     --flavor preprod --set-default --cleanup --commit $(git rev-parse HEAD)
   apk-build:
     profiles: ["build"]
     image: instrumentisto/flutter:3.24

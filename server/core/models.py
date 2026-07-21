@@ -550,6 +550,40 @@ class Release(models.Model):
     def __str__(self):
         return f'{self.version_name}+{self.version_code}'
 
+    @staticmethod
+    def storage_filename(version_name, version_code):
+        """Имя, под которым APK ложится в хранилище и раздаётся пользователю.
+
+        Flavor в имя не входит: реестр привязан к стенду (у preprod и prod свои
+        БД), поэтому flavor константный и в модели не хранится. Дефис, а не '+':
+        Django strip'ает '+' из имени файла в хранилище.
+        """
+        return f'tnoise-{version_name}-{version_code}.apk'
+
+    @classmethod
+    def create_from_apk(cls, apk_path, version_name, version_code,
+                        commit='', notes='', set_default=False):
+        """Создать релиз из собранного APK-файла и сохранить его в хранилище.
+
+        Не проверяет дубликаты — это делает вызывающий (register_release падает,
+        register_incoming пропускает). Возвращает созданный Release.
+        """
+        from django.core.files import File
+
+        release = cls(
+            version_name=version_name,
+            version_code=version_code,
+            commit_sha=commit,
+            notes=notes,
+            file_size=os.path.getsize(apk_path),
+        )
+        filename = cls.storage_filename(version_name, version_code)
+        with open(apk_path, 'rb') as fh:
+            release.apk.save(filename, File(fh), save=True)
+        if set_default:
+            release.set_default()
+        return release
+
     @property
     def download_url(self):
         """Публичная ссылка на скачивание этого APK (без авторизации)."""
