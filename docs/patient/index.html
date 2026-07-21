@@ -98,6 +98,19 @@
     background: var(--accent-soft); color: var(--accent);
     padding: 1px 8px; border-radius: 5px;
   }
+  /* Блок скачивания APK. По умолчанию скрыт: показывается скриптом внизу
+     страницы, только если сервер вернул доступный релиз. Без JS остаётся
+     скрытым — руководство при этом валидно, установка описана текстом ниже. */
+  .download { margin: 20px 0 26px; }
+  .download-btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 20px; font-weight: 700;
+    color: #fff; background: var(--accent); text-decoration: none;
+    padding: 14px 26px; border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  }
+  .download-btn:hover { background: #00695c; }
+  .download-note { font-size: 15px; color: var(--muted); margin: 9px 0 0; }
   footer {
     margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line);
     color: var(--muted); font-size: 15px;
@@ -157,9 +170,20 @@
 <section id="install">
   <h2><span class="num">1</span> Установка приложения</h2>
   <p>
-    Приложение не нужно искать в магазине приложений — оно скачивается
-    по ссылке, которую даст врач или клиника.
+    Приложение не нужно искать в магазине приложений.
+    <span id="apk-have-link" hidden>Нажмите кнопку ниже, чтобы скачать его.</span>
+    <span id="apk-no-link">Ссылку для скачивания даст врач или клиника.</span>
   </p>
+
+  <!-- Скрыт по умолчанию; показывается скриптом внизу страницы,
+       если сервер вернул доступный релиз (см. вариант B в Kaiten #67616429). -->
+  <div class="download" id="apk-download" hidden>
+    <a class="download-btn" id="apk-download-link" href="#" download>
+      ⬇ Скачать приложение
+    </a>
+    <p class="download-note" id="apk-download-note"></p>
+  </div>
+
   <ol class="steps">
     <li>Откройте ссылку на телефоне. Начнётся загрузка файла с приложением.</li>
     <li>
@@ -499,5 +523,32 @@
 
 </main>
 </div>
+
+<script>
+// Кнопка скачивания APK (Kaiten #67616429, вариант B).
+// Руководство — статический файл, одинаковый на всех стендах, и раздаётся с
+// того же origin, что /api и /releases. Спрашиваем у сервера активный релиз:
+//   GET /api/releases/latest → 200 = дефолтный или, если его нет, самый свежий;
+//                              404 = релизов нет.
+// Реестр релизов у каждого стенда свой, поэтому ссылка ведёт на APK этого стенда.
+// Блок показываем только при 200. На dev релизов обычно нет → блок остаётся
+// скрытым. Любая ошибка/отсутствие релизов оставляет страницу как есть.
+(function () {
+  fetch('/api/releases/latest', { headers: { Accept: 'application/json' } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rel) {
+      if (!rel || !rel.download_url) return;
+      var link = document.getElementById('apk-download-link');
+      link.setAttribute('href', rel.download_url);
+      var note = document.getElementById('apk-download-note');
+      if (rel.version_name) note.textContent = 'Версия ' + rel.version_name;
+      document.getElementById('apk-download').hidden = false;
+      document.getElementById('apk-have-link').hidden = false;
+      document.getElementById('apk-no-link').hidden = true;
+    })
+    .catch(function () { /* нет сети/релизов — оставляем текст про врача */ });
+})();
+</script>
+
 </body>
 </html>
