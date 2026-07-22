@@ -157,8 +157,8 @@ python manage.py generate_test_data --output-dir /tmp
   ```bash
   APK_FLAVOR=preprod docker compose --profile build run --rm apk-build
   docker compose exec web python manage.py register_incoming \
-      --flavor preprod --set-default --cleanup --commit $(git rev-parse HEAD)
-  # register_release (версия аргументами, падает на дубле) — для деплоя стендов
+      --flavor preprod --set-default --cleanup
+  # register_release (версия аргументом, падает на дубле) — для деплоя стендов
   ```
 - **Кэш Gradle** (`gradle_cache:/root/.gradle` в `apk-build`): чистая сборка тянет
   дистрибутив Gradle (~130 МБ) и зависимости; в закрытых сетях загрузка блокируется

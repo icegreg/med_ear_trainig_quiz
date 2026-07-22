@@ -21,13 +21,11 @@ APK_FLAVOR="${APK_FLAVOR:-preprod}"
 # preprod по умолчанию делаем дефолтным (удобно для стенда); отключается SET_DEFAULT=0.
 SET_DEFAULT="${SET_DEFAULT:-1}"
 
-COMMIT="$(git rev-parse HEAD 2>/dev/null || echo '')"
-
 echo "==> [1/2] Сборка APK (flavor=$APK_FLAVOR)"
 APK_FLAVOR="$APK_FLAVOR" docker compose --profile build run --rm apk-build
 
 echo "==> [2/2] Регистрация в реестре релизов"
-args=(--flavor "$APK_FLAVOR" --cleanup --commit "$COMMIT")
+args=(--flavor "$APK_FLAVOR" --cleanup)
 if [ "$SET_DEFAULT" = "1" ]; then
     args+=(--set-default)
 fi

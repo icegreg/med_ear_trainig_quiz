@@ -1,16 +1,23 @@
 """
 Регистрация собранного APK в реестре релизов (Kaiten #67040240).
 
-Вызывается сборочным сервисом после `flutter build apk` на стенде.
+Вызывается сборочным сервисом / деплоем стенда после `flutter build apk`.
+
+Реестр хранит одну запись на версию (`version_name`) и падает, если версия уже
+зарегистрирована (для локалки/пересборок есть идемпотентная `register_incoming`).
+
+Аргументы `--version-code`, `--commit`, `--notes` больше не используются (реестр
+эти поля не хранит, Kaiten #67689761), но принимаются и игнорируются, чтобы не
+ломать существующие вызовы деплоя стендов.
 
 Примеры:
   # Зарегистрировать APK и сразу сделать его дефолтным
   python manage.py register_release \
       --apk build/app/outputs/apk/prod/release/tnoise-prod-release-0.10.0+7.apk \
-      --version-name 0.10.0 --version-code 7 --commit $GIT_SHA --set-default
+      --version-name 0.10.0 --set-default
 
   # Просто добавить в реестр, не трогая дефолт
-  python manage.py register_release --apk out.apk --version-name 0.6.0 --version-code 2
+  python manage.py register_release --apk out.apk --version-name 0.6.0
 """
 import os
 
@@ -28,14 +35,13 @@ class Command(BaseCommand):
             '--version-name', required=True, help='versionName, напр. 0.6.0'
         )
         parser.add_argument(
-            '--version-code', required=True, type=int, help='versionCode, напр. 2'
-        )
-        parser.add_argument('--commit', default='', help='Git commit SHA')
-        parser.add_argument('--notes', default='', help='Описание релиза')
-        parser.add_argument(
             '--set-default', action='store_true',
             help='Сделать этот релиз дефолтным (ссылка latest.apk).',
         )
+        # Устаревшие: реестр их не хранит, принимаем ради совместимости с деплоем.
+        parser.add_argument('--version-code', help='(не используется)')
+        parser.add_argument('--commit', help='(не используется)')
+        parser.add_argument('--notes', help='(не используется)')
 
     def handle(self, *args, **opts):
         apk_path = opts['apk']
@@ -43,19 +49,14 @@ class Command(BaseCommand):
             raise CommandError(f'APK не найден: {apk_path}')
 
         version_name = opts['version_name']
-        version_code = opts['version_code']
 
-        if Release.objects.filter(
-            version_name=version_name, version_code=version_code
-        ).exists():
+        if Release.objects.filter(version_name=version_name).exists():
             raise CommandError(
-                f'Релиз {version_name}+{version_code} уже зарегистрирован.'
+                f'Релиз {version_name} уже зарегистрирован.'
             )
 
         release = Release.create_from_apk(
-            apk_path, version_name, version_code,
-            commit=opts['commit'], notes=opts['notes'],
-            set_default=opts['set_default'],
+            apk_path, version_name, set_default=opts['set_default'],
         )
 
         self.stdout.write(self.style.SUCCESS(

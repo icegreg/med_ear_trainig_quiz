@@ -661,34 +661,22 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(Release)
 class ReleaseAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'is_default', 'size_display', 'commit_short', 'download_link', 'created_at']
+    list_display = ['__str__', 'is_default', 'size_display', 'download_link', 'created_at']
     list_filter = ['is_default']
-    search_fields = ['version_name', 'commit_sha']
-    readonly_fields = ['file_size', 'created_at', 'download_link']
+    search_fields = ['version_name']
+    readonly_fields = ['size_display', 'created_at', 'download_link']
     actions = ['make_default']
 
     @admin.display(description='Размер')
     def size_display(self, obj):
+        # file_size — property, выводится из файла.
         return f'{obj.file_size / (1024 * 1024):.1f} МБ' if obj.file_size else '—'
-
-    @admin.display(description='Commit')
-    def commit_short(self, obj):
-        return obj.commit_sha[:8] if obj.commit_sha else '—'
 
     @admin.display(description='Скачать')
     def download_link(self, obj):
         if not obj.apk:
             return '—'
         return format_html('<a href="{}" target="_blank">APK</a>', obj.apk.url)
-
-    def save_model(self, request, obj, form, change):
-        # Размер берём из загруженного файла, чтобы не заполнять руками.
-        if obj.apk and hasattr(obj.apk, 'size'):
-            try:
-                obj.file_size = obj.apk.size
-            except (OSError, ValueError):
-                pass
-        super().save_model(request, obj, form, change)
 
     @admin.action(description='Сделать дефолтным (выберите один релиз)')
     def make_default(self, request, queryset):
