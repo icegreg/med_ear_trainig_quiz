@@ -98,6 +98,10 @@ services:
     volumes:
       - ./patient_app:/app
       - flutter_pub_cache:/root/.pub-cache
+      # Кэш Gradle (дистрибутив ~130 МБ + зависимости). Без него каждая чистая
+      # сборка качает дистрибутив заново; в закрытых сетях загрузка блокируется
+      # и сборка виснет. Посев тома — см. CLAUDE.md, раздел «Сборка APK».
+      - gradle_cache:/root/.gradle
       - media_data:/out
     command: >
       sh -c "flutter pub get &&
@@ -112,3 +116,4 @@ volumes:
   static_data:
   client_logs_data:
   flutter_pub_cache:
+  gradle_cache:

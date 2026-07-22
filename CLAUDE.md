@@ -160,6 +160,17 @@ python manage.py generate_test_data --output-dir /tmp
       --flavor preprod --set-default --cleanup
   # register_release (версия аргументом, падает на дубле) — для деплоя стендов
   ```
+- **Кэш Gradle** (`gradle_cache:/root/.gradle` в `apk-build`): чистая сборка тянет
+  дистрибутив Gradle (~130 МБ) и зависимости; в закрытых сетях загрузка блокируется
+  и сборка виснет. Том сохраняет кэш между сборками. **Разовый посев** из хостового
+  `~/.gradle` (если на хосте уже собирали Android/Gradle):
+  ```bash
+  docker volume create med_ear_trainig_quiz_gradle_cache
+  docker run --rm -v ~/.gradle:/src:ro \
+      -v med_ear_trainig_quiz_gradle_cache:/dest alpine \
+      sh -c "cp -a /src/wrapper /dest/ && cp -a /src/caches /dest/"
+  ```
+  Если сеть открыта, посев не нужен — первая сборка сама наполнит том.
 - **Автосборка**: CI job `build-apk` собирает release-APK (preprod+prod) при
   **push в main** и публикует артефактами; доставку на стенд (вызов
   `register_release`) выполняет деплой стенда.
