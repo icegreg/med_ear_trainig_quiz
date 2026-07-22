@@ -150,9 +150,10 @@ python manage.py generate_test_data --output-dir /tmp
   APK_FLAVOR=prod scripts/build-and-register-apk.sh  # prod
   ```
   Скрипт собирает APK (`apk-build`) и регистрирует его командой `register_incoming`,
-  которая выводит версию из имени файла (`tnoise-<flavor>-release-<vName>+<vCode>.apk`)
-  и идемпотентна (повтор той же версии — пропуск). Сборка и регистрация в разных
-  контейнерах: БД только у `web`, Flutter только у `apk-build`.
+  которая выводит версию из имени файла (`tnoise-<flavor>-release-<vName>+<vCode>.apk`);
+  пересборка той же версии заменяет прежний релиз (реестр хранит одну запись на
+  версию). Сборка и регистрация в разных контейнерах: БД только у `web`,
+  Flutter только у `apk-build`.
 - **Ручная сборка/регистрация** (по шагам, если нужен контроль):
   ```bash
   APK_FLAVOR=preprod docker compose --profile build run --rm apk-build
