@@ -237,3 +237,80 @@ class RegisterIncomingCommandTest(TestCase):
         self._incoming(name)
         self._run(cleanup=True)
         self.assertFalse(os.path.isfile(os.path.join(self.incoming, name)))
+
+
+@override_settings(MEDIA_ROOT=_MEDIA)
+class LatestApkSyncTest(TestCase):
+    """latest.apk всегда отражает дефолт; без дефолта ссылка 404 (Kaiten #67702702)."""
+
+    def _latest_path(self):
+        return os.path.join(_MEDIA, 'releases', Release.LATEST_APK_NAME)
+
+    def test_default_creates_latest(self):
+        make_release('1.0', is_default=True)
+        self.assertTrue(os.path.isfile(self._latest_path()))
+        self.assertEqual(self.client.get('/releases/latest.apk').status_code, 200)
+
+    def test_uncheck_default_removes_latest(self):
+        rel = make_release('1.1', is_default=True)
+        self.assertTrue(os.path.isfile(self._latest_path()))
+        # Снятие галочки в админке — обычный save().
+        rel.is_default = False
+        rel.save()
+        self.assertFalse(os.path.isfile(self._latest_path()))
+        self.assertEqual(self.client.get('/releases/latest.apk').status_code, 404)
+
+    def test_delete_default_removes_latest(self):
+        rel = make_release('1.2', is_default=True)
+        self.assertTrue(os.path.isfile(self._latest_path()))
+        rel.delete()
+        self.assertFalse(os.path.isfile(self._latest_path()))
+        self.assertEqual(self.client.get('/releases/latest.apk').status_code, 404)
+
+    def test_switch_default_repoints_latest(self):
+        make_release('1.3', is_default=True)
+        newer = make_release('1.4')
+        newer.set_default()
+        with open(self._latest_path(), 'rb') as fh:
+            self.assertEqual(fh.read(), b'APKDATA')
+        self.assertEqual(Release.objects.filter(is_default=True).count(), 1)
+
+
+@override_settings(MEDIA_ROOT=_MEDIA)
+class ReleasesCommandTest(TestCase):
+    """CLI releases: list / set-default / unset-default (Kaiten #67702724)."""
+
+    def _latest_path(self):
+        return os.path.join(_MEDIA, 'releases', Release.LATEST_APK_NAME)
+
+    def _run(self, *args):
+        out = io.StringIO()
+        call_command('releases', *args, stdout=out)
+        return out.getvalue()
+
+    def test_list_shows_releases(self):
+        make_release('0.9')
+        make_release('1.0', is_default=True)
+        out = self._run('list')
+        self.assertIn('0.9', out)
+        self.assertIn('1.0', out)
+
+    def test_set_default_switches(self):
+        make_release('0.9', is_default=True)
+        make_release('1.0')
+        self._run('set-default', '1.0')
+        self.assertTrue(Release.objects.get(version_name='1.0').is_default)
+        self.assertFalse(Release.objects.get(version_name='0.9').is_default)
+        self.assertEqual(Release.objects.filter(is_default=True).count(), 1)
+
+    def test_set_default_nonexistent_fails(self):
+        with self.assertRaises(CommandError):
+            self._run('set-default', 'нет-такой')
+
+    def test_unset_default_removes_latest(self):
+        make_release('1.0', is_default=True)
+        self.assertTrue(os.path.isfile(self._latest_path()))
+        self._run('unset-default')
+        self.assertFalse(Release.objects.filter(is_default=True).exists())
+        self.assertFalse(os.path.isfile(self._latest_path()))
+        self.assertEqual(self.client.get('/releases/latest.apk').status_code, 404)

@@ -598,7 +598,11 @@ class Release(models.Model):
         return f'/releases/{cls.LATEST_APK_NAME}'
 
     def set_default(self):
-        """Сделать релиз дефолтным (снимает флаг с прежнего дефолта)."""
+        """Сделать релиз дефолтным (снимает флаг с прежнего дефолта).
+
+        Файл latest.apk синхронизирует сигнал post_save (см. core/signals.py):
+        self.save() ниже его и триггерит.
+        """
         with transaction.atomic():
             Release.objects.filter(is_default=True).exclude(pk=self.pk).update(
                 is_default=False
@@ -606,20 +610,32 @@ class Release(models.Model):
             if not self.is_default:
                 self.is_default = True
                 self.save(update_fields=['is_default'])
-        self._sync_latest_apk()
+            else:
+                # Уже дефолтный — save не сработает, синхронизируем явно.
+                Release.refresh_latest()
 
-    def _sync_latest_apk(self):
-        """Скопировать дефолтный APK в стабильный путь releases/latest.apk.
+    @classmethod
+    def refresh_latest(cls):
+        """Привести стабильный latest.apk в соответствие с дефолтом.
 
-        Отдельный неизменный путь нужен, чтобы nginx (локально) и Django (на
-        стендах) отдавали «последний релиз» по постоянной ссылке.
+        Есть дефолт → latest.apk = его файл. Дефолта нет → удалить latest.apk,
+        чтобы `/releases/latest.apk` честно отдавал 404 (nginx и serve_release
+        404-ят при отсутствии файла). Вызывается сигналами post_save/post_delete
+        Release и командой releases (unset-default делает bulk update без сигналов).
         """
-        if not self.apk:
-            return
         releases_dir = os.path.join(settings.MEDIA_ROOT, 'releases')
-        os.makedirs(releases_dir, exist_ok=True)
-        latest = os.path.join(releases_dir, self.LATEST_APK_NAME)
-        tmp = f'{latest}.tmp'
-        with self.apk.open('rb') as src, open(tmp, 'wb') as dst:
-            shutil.copyfileobj(src, dst)
-        os.replace(tmp, latest)  # атомарная подмена
+        latest = os.path.join(releases_dir, cls.LATEST_APK_NAME)
+
+        default = cls.objects.filter(is_default=True).first()
+        if default and default.apk:
+            os.makedirs(releases_dir, exist_ok=True)
+            tmp = f'{latest}.tmp'
+            try:
+                with default.apk.open('rb') as src, open(tmp, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                os.replace(tmp, latest)  # атомарная подмена
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+        elif os.path.exists(latest):
+            os.remove(latest)  # дефолта нет → ссылка должна 404-ить
