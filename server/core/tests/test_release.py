@@ -1,4 +1,8 @@
-"""Тесты реестра релизов APK: модель, публичная раздача, публичный API."""
+"""Тесты реестра релизов APK: модель, публичная раздача, публичный API, команды.
+
+Реестр хранит одну запись на версию (`version_name`); versionCode/commit/notes/
+file_size из модели убраны (Kaiten #67689761). Размер — property из файла.
+"""
 import io
 import os
 import tempfile
@@ -14,31 +18,31 @@ from core.models import Release
 _MEDIA = tempfile.mkdtemp(prefix='test_releases_')
 
 
-def make_release(version_name='0.6.0', version_code=1, is_default=False):
+def make_release(version_name='0.6.0', is_default=False):
     return Release.objects.create(
         version_name=version_name,
-        version_code=version_code,
         is_default=is_default,
-        file_size=len(b'APKDATA'),
-        apk=SimpleUploadedFile(
-            f'tnoise-{version_name}+{version_code}.apk', b'APKDATA'
-        ),
+        apk=SimpleUploadedFile(f'tnoise-{version_name}.apk', b'APKDATA'),
     )
 
 
 @override_settings(MEDIA_ROOT=_MEDIA)
 class ReleaseModelTest(TestCase):
     def test_str(self):
-        self.assertEqual(str(make_release('0.6.0', 2)), '0.6.0+2')
+        self.assertEqual(str(make_release('0.6.0')), '0.6.0')
+
+    def test_file_size_from_file(self):
+        # file_size — property, выводится из файла, не хранимое поле.
+        self.assertEqual(make_release('0.6.0').file_size, len(b'APKDATA'))
 
     def test_download_url(self):
-        rel = make_release('0.6.0', 2)
+        rel = make_release('0.6.0')
         self.assertTrue(rel.download_url.startswith('/releases/'))
         self.assertTrue(rel.download_url.endswith('.apk'))
 
     def test_set_default_switches_default(self):
-        first = make_release('0.6.0', 1, is_default=True)
-        second = make_release('0.7.0', 2)
+        first = make_release('0.6.0', is_default=True)
+        second = make_release('0.7.0')
 
         second.set_default()
 
@@ -49,14 +53,14 @@ class ReleaseModelTest(TestCase):
         self.assertEqual(Release.objects.filter(is_default=True).count(), 1)
 
     def test_set_default_idempotent(self):
-        rel = make_release('0.6.0', 1, is_default=True)
+        rel = make_release('0.6.0', is_default=True)
         rel.set_default()
         rel.refresh_from_db()
         self.assertTrue(rel.is_default)
         self.assertEqual(Release.objects.filter(is_default=True).count(), 1)
 
     def test_set_default_copies_latest_apk(self):
-        rel = make_release('0.6.0', 3)
+        rel = make_release('0.6.0')
         rel.set_default()
         latest = os.path.join(_MEDIA, 'releases', Release.LATEST_APK_NAME)
         self.assertTrue(os.path.isfile(latest))
@@ -64,16 +68,16 @@ class ReleaseModelTest(TestCase):
             self.assertEqual(fh.read(), b'APKDATA')
 
     def test_only_one_default_enforced_by_db(self):
-        make_release('0.6.0', 1, is_default=True)
+        make_release('0.6.0', is_default=True)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                make_release('0.7.0', 2, is_default=True)
+                make_release('0.7.0', is_default=True)
 
     def test_version_unique(self):
-        make_release('0.6.0', 1)
+        make_release('0.6.0')
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                make_release('0.6.0', 1)
+                make_release('0.6.0')
 
 
 @override_settings(MEDIA_ROOT=_MEDIA)
@@ -81,7 +85,7 @@ class ReleasePublicServingTest(TestCase):
     """Скачивание APK доступно БЕЗ авторизации (by design, Kaiten #67040240)."""
 
     def test_download_public_no_auth(self):
-        rel = make_release('0.6.0', 10)
+        rel = make_release('0.6.1')
         resp = self.client.get(rel.download_url)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(b''.join(resp.streaming_content), b'APKDATA')
@@ -96,22 +100,25 @@ class ReleaseApiTest(TestCase):
     """Публичный API реестра — без токена."""
 
     def test_list_public(self):
-        make_release('0.6.0', 20)
+        make_release('0.6.2')
         resp = self.client.get('/api/releases/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.json()), 1)
 
     def test_latest_returns_default(self):
-        make_release('0.6.0', 21)
-        newest_default = make_release('0.7.0', 22)
+        make_release('0.6.3')
+        newest_default = make_release('0.7.3')
         newest_default.set_default()
 
         resp = self.client.get('/api/releases/latest')
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
-        self.assertEqual(body['version_name'], '0.7.0')
+        self.assertEqual(body['version_name'], '0.7.3')
         self.assertTrue(body['is_default'])
         self.assertEqual(body['download_url'], newest_default.download_url)
+        # Удалённых полей в контракте больше нет.
+        for gone in ('version_code', 'commit_sha', 'notes'):
+            self.assertNotIn(gone, body)
 
     def test_latest_empty_returns_404(self):
         resp = self.client.get('/api/releases/latest')
@@ -130,22 +137,17 @@ class RegisterReleaseCommandTest(TestCase):
         return path
 
     def test_stored_filename_is_branded(self):
-        # Версии у тестов разные: MEDIA_ROOT общий на модуль, и при совпадении
-        # имени Django допишет к файлу случайный суффикс.
         call_command(
             'register_release', apk=self._build_apk(),
-            version_name='0.10.0', version_code=7, stdout=io.StringIO(),
+            version_name='0.10.0', stdout=io.StringIO(),
         )
         release = Release.objects.get()
-        # Имя в хранилище не зависит от имени собранного файла: flavor в него
-        # не входит (реестр привязан к стенду), '+' заменён на '-'.
-        self.assertEqual(
-            os.path.basename(release.apk.name), 'tnoise-0.10.0-7.apk'
-        )
-        self.assertIn('tnoise-0.10.0-7.apk', release.download_url)
+        # Имя в хранилище: только версия, без flavor и versionCode.
+        self.assertEqual(os.path.basename(release.apk.name), 'tnoise-0.10.0.apk')
+        self.assertIn('tnoise-0.10.0.apk', release.download_url)
 
     def test_rejects_duplicate_version(self):
-        args = dict(version_name='0.11.0', version_code=8, stdout=io.StringIO())
+        args = dict(version_name='0.11.0', stdout=io.StringIO())
         call_command('register_release', apk=self._build_apk(), **args)
         with self.assertRaises(CommandError):
             call_command('register_release', apk=self._build_apk(), **args)
@@ -154,13 +156,22 @@ class RegisterReleaseCommandTest(TestCase):
         with self.assertRaises(CommandError):
             call_command(
                 'register_release', apk='/nope/absent.apk',
-                version_name='0.10.0', version_code=7, stdout=io.StringIO(),
+                version_name='0.10.0', stdout=io.StringIO(),
             )
+
+    def test_legacy_args_accepted_and_ignored(self):
+        # Деплой стендов ещё передаёт --version-code/--commit/--notes.
+        call_command(
+            'register_release', apk=self._build_apk(),
+            version_name='0.12.0', version_code='9', commit='abc123',
+            notes='старое', stdout=io.StringIO(),
+        )
+        self.assertTrue(Release.objects.filter(version_name='0.12.0').exists())
 
 
 @override_settings(MEDIA_ROOT=_MEDIA)
 class RegisterIncomingCommandTest(TestCase):
-    """register_incoming выводит версию из имени файла в incoming/ и идемпотентен."""
+    """register_incoming выводит версию из имени файла; пересборка заменяет релиз."""
 
     def setUp(self):
         self.incoming = os.path.join(_MEDIA, 'releases', 'incoming')
@@ -168,9 +179,9 @@ class RegisterIncomingCommandTest(TestCase):
         for f in os.listdir(self.incoming):
             os.remove(os.path.join(self.incoming, f))
 
-    def _incoming(self, name):
+    def _incoming(self, name, data=b'APKDATA'):
         with open(os.path.join(self.incoming, name), 'wb') as fh:
-            fh.write(b'APKDATA')
+            fh.write(data)
 
     def _run(self, **opts):
         call_command('register_incoming', stdout=io.StringIO(), **opts)
@@ -180,27 +191,39 @@ class RegisterIncomingCommandTest(TestCase):
         self._run()
         rel = Release.objects.get()
         self.assertEqual(rel.version_name, '0.12.0')
-        self.assertEqual(rel.version_code, 9)
-        # В хранилище — каноническое имя, а не имя из incoming.
-        self.assertEqual(os.path.basename(rel.apk.name), 'tnoise-0.12.0-9.apk')
+        # В хранилище — только версия, без flavor и versionCode.
+        self.assertEqual(os.path.basename(rel.apk.name), 'tnoise-0.12.0.apk')
 
-    def test_idempotent_skips_duplicate(self):
-        self._incoming('tnoise-preprod-release-0.12.1+10.apk')
+    def test_rebuild_replaces_same_version(self):
+        self._incoming('tnoise-preprod-release-0.12.1+10.apk', b'FIRST')
+        self._run(cleanup=True)
+        # Пересборка той же версии (другой код/содержимое) — заменяет запись.
+        self._incoming('tnoise-preprod-release-0.12.1+11.apk', b'SECOND')
+        self._run(cleanup=True)
+        self.assertEqual(Release.objects.filter(version_name='0.12.1').count(), 1)
+        rel = Release.objects.get(version_name='0.12.1')
+        with rel.apk.open('rb') as fh:
+            self.assertEqual(fh.read(), b'SECOND')
+
+    def test_replace_preserves_default(self):
+        self._incoming('tnoise-preprod-release-0.13.0+1.apk')
+        self._run(set_default=True)
+        self.assertTrue(Release.objects.get(version_name='0.13.0').is_default)
+        # Пересборка без --set-default сохраняет статус дефолтного.
+        self._incoming('tnoise-preprod-release-0.13.0+2.apk')
         self._run()
-        # Повторный прогон той же версии не падает и не дублирует.
-        self._run()
-        self.assertEqual(Release.objects.count(), 1)
+        self.assertTrue(Release.objects.get(version_name='0.13.0').is_default)
 
     def test_flavor_filter_picks_matching(self):
-        self._incoming('tnoise-preprod-release-0.13.0+11.apk')
-        self._incoming('tnoise-prod-release-0.14.0+12.apk')
+        self._incoming('tnoise-preprod-release-0.14.0+1.apk')
+        self._incoming('tnoise-prod-release-0.15.0+1.apk')
         self._run(flavor='prod')
         rel = Release.objects.get()
-        self.assertEqual(rel.version_name, '0.14.0')
+        self.assertEqual(rel.version_name, '0.15.0')
 
     def test_ambiguous_without_flavor_fails(self):
-        self._incoming('tnoise-preprod-release-0.13.0+11.apk')
-        self._incoming('tnoise-prod-release-0.14.0+12.apk')
+        self._incoming('tnoise-preprod-release-0.14.0+1.apk')
+        self._incoming('tnoise-prod-release-0.15.0+1.apk')
         with self.assertRaises(CommandError):
             self._run()
         self.assertEqual(Release.objects.count(), 0)
@@ -210,12 +233,7 @@ class RegisterIncomingCommandTest(TestCase):
             self._run()
 
     def test_cleanup_removes_incoming_file(self):
-        name = 'tnoise-preprod-release-0.15.0+13.apk'
+        name = 'tnoise-preprod-release-0.16.0+1.apk'
         self._incoming(name)
         self._run(cleanup=True)
         self.assertFalse(os.path.isfile(os.path.join(self.incoming, name)))
-
-    def test_set_default(self):
-        self._incoming('tnoise-preprod-release-0.16.0+14.apk')
-        self._run(set_default=True)
-        self.assertTrue(Release.objects.get().is_default)

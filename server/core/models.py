@@ -517,12 +517,12 @@ class Release(models.Model):
     берётся из settings.ENVIRONMENT.
     """
 
+    # Реестр — только раздача APK на скачивание, поэтому полей минимум:
+    # человекочитаемая версия, файл, флаг «дефолтный» и дата сборки. versionCode,
+    # git-commit, описание и размер здесь не хранятся (versionCode остаётся в
+    # самом APK — Android-поле манифеста; размер выводится из файла, см. property).
     version_name = models.CharField('Версия', max_length=50)  # напр. 0.6.0
-    version_code = models.PositiveIntegerField('Номер сборки')  # напр. 2
     apk = models.FileField('APK', upload_to='releases/')
-    file_size = models.PositiveBigIntegerField('Размер, байт', default=0)
-    commit_sha = models.CharField('Git commit', max_length=40, blank=True)
-    notes = models.TextField('Описание релиза', blank=True)
     is_default = models.BooleanField('Дефолтный релиз', default=False)
     created_at = models.DateTimeField('Собран', auto_now_add=True)
 
@@ -531,9 +531,10 @@ class Release(models.Model):
         verbose_name_plural = 'Релизы APK'
         ordering = ['-created_at']
         constraints = [
-            # версия уникальна в реестре стенда
+            # версия уникальна в реестре стенда (пересборка той же версии
+            # заменяет прежний релиз — см. register_incoming)
             models.UniqueConstraint(
-                fields=['version_name', 'version_code'],
+                fields=['version_name'],
                 name='uniq_release_version',
             ),
             # не более одного дефолтного релиза
@@ -548,36 +549,36 @@ class Release(models.Model):
     LATEST_APK_NAME = 'latest.apk'
 
     def __str__(self):
-        return f'{self.version_name}+{self.version_code}'
+        return self.version_name
+
+    @property
+    def file_size(self):
+        """Размер APK в байтах — выводится из файла, в БД не хранится."""
+        try:
+            return self.apk.size if self.apk else 0
+        except (OSError, ValueError):
+            return 0
 
     @staticmethod
-    def storage_filename(version_name, version_code):
+    def storage_filename(version_name):
         """Имя, под которым APK ложится в хранилище и раздаётся пользователю.
 
-        Flavor в имя не входит: реестр привязан к стенду (у preprod и prod свои
-        БД), поэтому flavor константный и в модели не хранится. Дефис, а не '+':
-        Django strip'ает '+' из имени файла в хранилище.
+        Flavor и versionCode в имя не входят: реестр привязан к стенду и хранит
+        одну запись на версию. Так пересборка версии кладётся под тем же именем.
         """
-        return f'tnoise-{version_name}-{version_code}.apk'
+        return f'tnoise-{version_name}.apk'
 
     @classmethod
-    def create_from_apk(cls, apk_path, version_name, version_code,
-                        commit='', notes='', set_default=False):
+    def create_from_apk(cls, apk_path, version_name, set_default=False):
         """Создать релиз из собранного APK-файла и сохранить его в хранилище.
 
         Не проверяет дубликаты — это делает вызывающий (register_release падает,
-        register_incoming пропускает). Возвращает созданный Release.
+        register_incoming заменяет). Возвращает созданный Release.
         """
         from django.core.files import File
 
-        release = cls(
-            version_name=version_name,
-            version_code=version_code,
-            commit_sha=commit,
-            notes=notes,
-            file_size=os.path.getsize(apk_path),
-        )
-        filename = cls.storage_filename(version_name, version_code)
+        release = cls(version_name=version_name)
+        filename = cls.storage_filename(version_name)
         with open(apk_path, 'rb') as fh:
             release.apk.save(filename, File(fh), save=True)
         if set_default:

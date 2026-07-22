@@ -390,11 +390,8 @@ class NotificationsListSchema(Schema):
 
 class ReleaseSchema(Schema):
     version_name: str
-    version_code: int
     is_default: bool
-    file_size: int
-    commit_sha: str
-    notes: str
+    file_size: int  # выводится из файла (property модели), не хранимое поле
     created_at: datetime
     download_url: str
 

@@ -4,15 +4,18 @@
 в общий том, а эта команда подхватывает его и регистрирует в реестре релизов —
 версию берёт из имени файла, ручной ввод не нужен.
 
-Отличие от register_release: та требует версию аргументами и падает на дубле
-(её вызывает деплой стенда); эта — выводит версию из имени и идемпотентна
-(повторный прогон той же версии просто пропускает).
+Реестр хранит одну запись на версию (`version_name`, Kaiten #67689761). Повторная
+регистрация той же версии (пересборка) **заменяет** прежний релиз, сохраняя статус
+дефолтного, — реестру нужен только последний APK каждой версии.
+
+Аргументы `--commit`/`--notes` больше не используются (реестр их не хранит), но
+принимаются и игнорируются ради совместимости.
 
 Примеры:
   # Зарегистрировать свежий preprod-APK и сделать дефолтным
-  python manage.py register_incoming --flavor preprod --set-default --commit $GIT_SHA
+  python manage.py register_incoming --flavor preprod --set-default
 
-  # Любой свежий APK из incoming/, без дефолта, с удалением исходника
+  # Любой свежий APK из incoming/, с удалением исходника
   python manage.py register_incoming --cleanup
 """
 import os
@@ -24,8 +27,8 @@ from django.core.management.base import BaseCommand, CommandError
 from core.models import Release
 
 # tnoise-<flavor>-<buildType>-<versionName>+<versionCode>.apk
-# (см. patient_app/android/app/build.gradle, outputFileName). versionName может
-# содержать точки, но не '+'; versionCode — только цифры.
+# (см. patient_app/android/app/build.gradle, outputFileName). versionCode из
+# имени берём только для его удаления при сравнении — в реестре он не хранится.
 _APK_RE = re.compile(
     r'^tnoise-(?P<flavor>[^-]+)-(?P<buildtype>[^-]+)-'
     r'(?P<version_name>[^+]+)\+(?P<version_code>\d+)\.apk$'
@@ -40,8 +43,6 @@ class Command(BaseCommand):
             '--flavor', default='',
             help='Брать только APK этого flavor (напр. preprod). Пусто — любой.',
         )
-        parser.add_argument('--commit', default='', help='Git commit SHA')
-        parser.add_argument('--notes', default='', help='Описание релиза')
         parser.add_argument(
             '--set-default', action='store_true',
             help='Сделать этот релиз дефолтным (ссылка latest.apk).',
@@ -50,6 +51,9 @@ class Command(BaseCommand):
             '--cleanup', action='store_true',
             help='Удалить исходный файл из incoming/ после успешной регистрации.',
         )
+        # Устаревшие: реестр их не хранит, принимаем ради совместимости.
+        parser.add_argument('--commit', help='(не используется)')
+        parser.add_argument('--notes', help='(не используется)')
 
     def handle(self, *args, **opts):
         incoming = os.path.join(settings.MEDIA_ROOT, 'releases', 'incoming')
@@ -72,8 +76,7 @@ class Command(BaseCommand):
 
         # Самый свежий по mtime. Если после фильтра по flavor осталось несколько
         # РАЗНЫХ версий — это неоднозначность, не регистрируем наугад.
-        versions = {(m.group('version_name'), m.group('version_code'))
-                    for _, m in candidates}
+        versions = {m.group('version_name') for _, m in candidates}
         if len(versions) > 1:
             names = ', '.join(sorted(n for n, _ in candidates))
             raise CommandError(
@@ -87,27 +90,22 @@ class Command(BaseCommand):
         )
         apk_path = os.path.join(incoming, name)
         version_name = m.group('version_name')
-        version_code = int(m.group('version_code'))
 
-        if Release.objects.filter(
-            version_name=version_name, version_code=version_code
-        ).exists():
-            self.stdout.write(self.style.WARNING(
-                f'Релиз {version_name}+{version_code} уже зарегистрирован — пропуск.'
-            ))
-            if opts['cleanup']:
-                os.remove(apk_path)
-                self.stdout.write(f'Удалён из incoming: {name}')
-            return
+        # Пересборка версии заменяет прежний релиз, сохраняя дефолтность.
+        existing = Release.objects.filter(version_name=version_name).first()
+        was_default = bool(existing and existing.is_default)
+        if existing:
+            existing.apk.delete(save=False)
+            existing.delete()
 
         release = Release.create_from_apk(
-            apk_path, version_name, version_code,
-            commit=opts['commit'], notes=opts['notes'],
-            set_default=opts['set_default'],
+            apk_path, version_name,
+            set_default=opts['set_default'] or was_default,
         )
 
+        verb = 'Заменён' if existing else 'Зарегистрирован'
         self.stdout.write(self.style.SUCCESS(
-            f'Зарегистрирован релиз {release} '
+            f'{verb} релиз {release} '
             f'(default={release.is_default}) → {release.download_url}'
         ))
 
