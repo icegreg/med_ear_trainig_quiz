@@ -44,7 +44,6 @@ from .models import (
     Quiz,
     QuizQuestion,
     QuizResult,
-    Release,
 )
 
 
@@ -655,34 +654,3 @@ class NotificationAdmin(admin.ModelAdmin):
     @admin.display(description='Сообщение')
     def message_short(self, obj):
         return obj.message[:80] + '...' if len(obj.message) > 80 else obj.message
-
-
-# --- Release (APK) ---
-
-@admin.register(Release)
-class ReleaseAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'is_default', 'size_display', 'download_link', 'created_at']
-    list_filter = ['is_default']
-    search_fields = ['version_name']
-    readonly_fields = ['size_display', 'created_at', 'download_link']
-    actions = ['make_default']
-
-    @admin.display(description='Размер')
-    def size_display(self, obj):
-        # file_size — property, выводится из файла.
-        return f'{obj.file_size / (1024 * 1024):.1f} МБ' if obj.file_size else '—'
-
-    @admin.display(description='Скачать')
-    def download_link(self, obj):
-        if not obj.apk:
-            return '—'
-        return format_html('<a href="{}" target="_blank">APK</a>', obj.apk.url)
-
-    @admin.action(description='Сделать дефолтным (выберите один релиз)')
-    def make_default(self, request, queryset):
-        if queryset.count() != 1:
-            messages.error(request, 'Выберите ровно один релиз для назначения дефолтным.')
-            return
-        release = queryset.first()
-        release.set_default()
-        messages.success(request, f'Дефолтный релиз: {release}')
