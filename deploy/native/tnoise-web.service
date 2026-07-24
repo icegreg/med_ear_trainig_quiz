@@ -1,0 +1,32 @@
+# systemd-юнит нативной установки TNOISE (Django + gunicorn).
+# Установка:
+#   sudo cp deploy/native/tnoise-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now tnoise-web.service
+#
+# Предполагает: проект в /opt/tnoise, venv в /opt/tnoise/venv,
+# пользователь/группа tnoise, .env в /opt/tnoise/.env (POSTGRES_HOST=127.0.0.1).
+
+[Unit]
+Description=TNOISE Django (gunicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=tnoise
+Group=tnoise
+WorkingDirectory=/opt/tnoise/server
+EnvironmentFile=/opt/tnoise/.env
+ExecStart=/opt/tnoise/venv/bin/gunicorn config.wsgi:application \
+    --config /opt/tnoise/deploy/native/gunicorn.conf.py
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# Немного изоляции.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
