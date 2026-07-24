@@ -45,6 +45,10 @@ Medical hearing test platform (платформа тестирования сл�
 
 ## Build & Run
 
+> Продовое развёртывание (Docker и нативно, Ubuntu 24.04 / Debian 12–13, TLS
+> Let's Encrypt для tnoise.com, бэкапы, скрипты старт/останов) описано отдельно:
+> [`docs/deploy/README.md`](docs/deploy/README.md), артефакты — в [`deploy/`](deploy).
+
 ### Docker (рекомендуемый способ)
 ```bash
 # Собрать Flutter web + поднять всё
