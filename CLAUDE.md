@@ -142,16 +142,14 @@ python manage.py generate_test_data --output-dir /tmp
     (nginx раздаёт напрямую локально; на стендах Coolify — Django `serve_release`).
   - `GET /releases/<file>` — конкретный APK.
   - `GET /api/releases/` — список релизов; `GET /api/releases/latest` — дефолтный.
-- **Админка**: раздел «Релизы APK» — список, загрузка, action «Сделать дефолтным»
-  (`Release.set_default()` снимает прежний дефолт и обновляет `latest.apk`).
-- **CLI управления реестром**:
+- **Управление реестром — только CLI** (в админке раздела релизов нет):
   ```bash
   docker compose exec web python manage.py releases list                # список, дефолт помечен *
   docker compose exec web python manage.py releases set-default 0.10.1  # сделать версию дефолтной
   docker compose exec web python manage.py releases unset-default       # снять дефолт
   ```
-  `latest.apk` держится в синхроне с дефолтом сигналами Release (форма админки,
-  action, удаление). Дефолта нет → `latest.apk` удаляется, `/releases/latest.apk`
+  `latest.apk` держится в синхроне с дефолтом сигналами Release (`set_default`,
+  удаление). Дефолта нет → `latest.apk` удаляется, `/releases/latest.apk`
   отдаёт 404 (`/api/releases/latest` при этом отдаёт свежайший релиз по fallback).
 - **Сборка + регистрация одной командой** (локалка/preprod):
   ```bash
