@@ -91,6 +91,25 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# ── HTTPS за reverse-proxy ────────────────────────────────────────────────
+# На проде TLS терминирует nginx и проксирует на gunicorn по http, передавая
+# X-Forwarded-Proto. Без SECURE_PROXY_SSL_HEADER Django считает такой запрос
+# небезопасным и, например, отдаёт http:// в абсолютных ссылках.
+# Заголовку можно верить только потому, что снаружи gunicorn недоступен
+# (порт не опубликован) — единственный источник запросов это наш nginx.
+#
+# SECURE_SSL_REDIRECT намеренно НЕ включаем: редирект уже делает nginx, а
+# docker-healthcheck ходит на http://127.0.0.1:8000/api/docs без прокси-
+# заголовков и получил бы 301 вместо 200 — контейнер стал бы unhealthy.
+SECURE_HTTPS = os.environ.get(
+    'SECURE_HTTPS', 'True' if ENVIRONMENT == 'prod' else 'False'
+).lower() in ('true', '1', 'yes')
+
+if SECURE_HTTPS:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
