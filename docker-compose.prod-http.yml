@@ -1,0 +1,26 @@
+# Оверрайд для первого этапа self-hosted прода: nginx только на :80, без TLS.
+#
+# Зачем: базовый docker-compose.prod.yml публикует 443 и монтирует
+# nginx.prod.conf, который требует уже выпущенных сертов Let's Encrypt —
+# на чистом хосте (и когда 443 занят другим сервисом) он не поднимется.
+#
+# Запуск:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.prod-http.yml up -d --build
+#
+# Переход на HTTPS: выпустить серты (профиль certbot, webroot /var/www/certbot
+# уже смонтирован и отдаётся по :80), затем поднимать без этого оверрайда —
+# базовый файл вернёт :443 и nginx.prod.conf.
+
+services:
+  nginx:
+    # !override — иначе compose дописал бы 443 к списку из базового файла.
+    ports: !override
+      - "80:80"
+    volumes: !override
+      - ./nginx/nginx.prod-http.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./patient_app/build/web:/usr/share/nginx/html/patient:ro
+      - ./doctor_app/build/web:/usr/share/nginx/html/doctor:ro
+      - static_data:/var/www/static:ro
+      - media_data:/var/www/media:ro
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot

@@ -1,0 +1,154 @@
+# Docker Compose для self-hosted прода (обычный VPS, полный стек в одном хосте).
+#
+# Отличия от docker-compose.yml (локалка):
+#   • переменные берутся из .env.prod (ENVIRONMENT=prod, DEBUG всегда False);
+#   • порт PostgreSQL НЕ пробрасывается наружу — БД доступна только внутри сети;
+#   • на всех сервисах restart: unless-stopped;
+#   • Flutter web собирается с FLAVOR=prod (профиль "build"), а не dev;
+#   • нет debug-профилей и отладочных монтирований.
+#
+# Отличается от docker-compose.coolify.yml: там нет своей БД и nginx (их даёт
+# Coolify), а здесь стек самодостаточный.
+#
+# Запуск:
+#   cp .env.prod .env            # заполнить реальные секреты (SECRET_KEY, пароль БД)
+#   # собрать web-бандлы Flutter под prod:
+#   docker compose -f docker-compose.prod.yml --profile build run --rm flutter-patient
+#   docker compose -f docker-compose.prod.yml --profile build run --rm flutter-doctor
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# TLS: nginx слушает :80 и :443 (nginx.prod.conf), серты Let's Encrypt.
+# Первичный выпуск — scripts/init-letsencrypt.sh (он же переключает стек с
+# http-оверрайда на TLS). Продление автоматическое: сайдкар certbot + reload
+# nginx по таймеру, оба ниже. Полная процедура — deploy/HTTPS.md.
+# Домен: tnoise.com (+ www).
+
+services:
+  db:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env.prod
+    # Порт наружу НЕ пробрасываем: доступ к БД только по внутренней сети compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build: ./server
+    expose:
+      - "8000"
+    env_file:
+      - .env.prod
+    environment:
+      # Публичная документация на /docs/. По умолчанию выключена в проде;
+      # чтобы включить — задайте DOCS_DIR=/app/docs в .env.prod (папка монтируется ниже).
+      - DOCS_DIR=${DOCS_DIR:-}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-3}
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+      - client_logs_data:/app/client_logs
+      - ./docs:/app/docs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/docs\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py migrate --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers $${GUNICORN_WORKERS:-3}"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./patient_app/build/web:/usr/share/nginx/html/patient:ro
+      - ./doctor_app/build/web:/usr/share/nginx/html/doctor:ro
+      - static_data:/var/www/static:ro
+      - media_data:/var/www/media:ro
+      # TLS: серты Let's Encrypt + webroot для ACME-challenge (renew).
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      web:
+        condition: service_healthy
+    # Раз в 6 часов перечитываем конфиг: certbot-сайдкар продлевает серты в
+    # общем томе letsencrypt, но nginx держит их открытыми до reload.
+    # exec — чтобы nginx стал PID 1 и получал SIGTERM от `docker compose down`;
+    # без exec сигнал уходит в sh, nginx не гасится штатно и ждёт SIGKILL.
+    command: >
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done &
+                  exec nginx -g 'daemon off;'"
+    restart: unless-stopped
+
+  # ─── Certbot (Let's Encrypt) ────────────────────────────────────────────
+  # Сайдкар автопродления. Раз в 12 часов дёргает `certbot renew`; пока сертов
+  # нет — это безвредный no-op, поэтому сервис можно держать поднятым всегда.
+  # Общие тома с nginx: серты в letsencrypt, ACME-challenge в certbot_www;
+  # challenge отдаёт nginx с :80 (location /.well-known/acme-challenge/).
+  #
+  # ПЕРВИЧНЫЙ ВЫПУСК сертов делает scripts/init-letsencrypt.sh — руками
+  # повторять не нужно, см. deploy/HTTPS.md.
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+                  while :; do
+                    certbot renew --webroot -w /var/www/certbot --quiet;
+                    sleep 12h & wait $${!};
+                  done"
+    restart: unless-stopped
+
+  # ─── Prod-сборка Flutter web (one-shot, профиль "build") ────────────────
+  # Собирает web-бандлы с FLAVOR=prod в ./*/build/web, которые раздаёт nginx.
+  #   docker compose -f docker-compose.prod.yml --profile build run --rm flutter-patient
+  #   docker compose -f docker-compose.prod.yml --profile build run --rm flutter-doctor
+  flutter-patient:
+    profiles: ["build"]
+    image: instrumentisto/flutter:3.24
+    working_dir: /app
+    volumes:
+      - ./patient_app:/app
+      - flutter_pub_cache:/root/.pub-cache
+    command: >
+      sh -c "flutter pub get &&
+             flutter build web --dart-define=FLAVOR=prod &&
+             chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
+
+  flutter-doctor:
+    profiles: ["build"]
+    image: instrumentisto/flutter:3.24
+    working_dir: /app
+    volumes:
+      - ./doctor_app:/app
+      - flutter_pub_cache:/root/.pub-cache
+    command: >
+      sh -c "flutter pub get &&
+             flutter build web --base-href=/doctors/ --dart-define=FLAVOR=prod &&
+             chown -R ${HOST_UID:-1000}:${HOST_GID:-1000} /app"
+
+volumes:
+  postgres_data:
+  media_data:
+  static_data:
+  client_logs_data:
+  flutter_pub_cache:
+  letsencrypt:
+  certbot_www:
