@@ -124,9 +124,27 @@ openssl s_client -connect tnoise.com:443 -servername tnoise.com </dev/null 2>/de
     | openssl x509 -noout -subject -dates        # серт на tnoise.com, +90 дней
 
 # автопродление действительно работает
-docker compose -f docker-compose.prod.yml run --rm --entrypoint certbot certbot renew --dry-run
+docker compose -f docker-compose.prod.yml run --rm -T --entrypoint certbot certbot renew --dry-run
 docker compose -f docker-compose.prod.yml logs --tail 20 certbot
 ```
+
+> **`renew --dry-run` «висит» минут пять — это норма, не ломайте его.**
+> В non-interactive режиме certbot вставляет случайную задержку до ~8 минут
+> («Non-interactive renewal: random delay of N seconds»), чтобы клиенты не
+> долбили серверы LE в одну секунду. Ждите, не прерывайте по таймауту.
+>
+> Если всё-таки прервали: `docker compose run` оставляет контейнер живым, он
+> держит lock на `/etc/letsencrypt`, и следующий запуск упадёт с *«Another
+> instance of Certbot is already running»*. Лечится так:
+> ```bash
+> docker ps -aq --filter name=certbot-run | xargs -r docker rm -f
+> ```
+>
+> Сайдкар автопродления этой задержкой не смущается — он живёт в цикле
+> с `sleep 12h`. Что он отработал и спит, видно так:
+> ```bash
+> docker exec med_ear_trainig_quiz-certbot-1 ps -o pid,args   # ждём `sleep 12h`
+> ```
 
 Руками: вход в админку `https://tnoise.com/admin/` (проверяет secure-cookie и CSRF)
 и вход врача на `https://tnoise.com/doctors/`.
