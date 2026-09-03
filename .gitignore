@@ -32,3 +32,6 @@ Thumbs.db
 
 # Generated credentials
 *_credentials.csv
+
+# Прод-креды тестовых учёток
+*_credentials.md
